@@ -2,8 +2,7 @@
 
 This repository contains a proof‑of‑concept Streamlit app demonstrating how
 machine learning can be applied to rough‑diamond auction data.  It was
-developed as part of a MASA innovation programme proposal to illustrate the
-potential impact of a **Diamond Auction Intelligence** platform for
+developed to illustrate the potential impact of a **Diamond Auction Intelligence** platform for
 Botswana’s state‑owned Okavango Diamond Company (ODC).
 
 ## Features
@@ -17,25 +16,6 @@ Botswana’s state‑owned Okavango Diamond Company (ODC).
 - Batch predictions for all lots with a downloadable CSV output.
 - Background information on why such a platform matters for Botswana,
   including citations to recent news sources.
-
-## Installation and Usage
-
-1. **Python 3.8+ required.** Clone this repository or download the
-   `diamond_auction_app` folder.
-2. Install the dependencies:
-
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-3. Run the application locally via Streamlit:
-
-   ```bash
-   streamlit run app.py
-   ```
-
-   The app will open in your default browser.  Use the sidebar controls to
-   train the models, explore the data and obtain predictions.
 
 ## Synthetic Dataset
 
@@ -61,17 +41,11 @@ as bidder category or origin.
 ## Context and Need
 
 Botswana’s economy is heavily reliant on diamonds, accounting for
-**around 80 % of exports** and **roughly one‑third of fiscal revenue**【706415933680656†L124-L131】.
+**around 80 % of exports** and **roughly one‑third of fiscal revenue**.
 Weak demand in 2024 reduced Okavango Diamond Company’s revenues to about
-**60 % of 2023 levels**【122746669238548†L224-L225】.  Because ODC sells most of its supply via a
-handful of online auctions each year【122746669238548†L198-L200】, optimising lot composition
+**60 % of 2023 levels**.  Because ODC sells most of its supply via a
+handful of online auctions each year, optimising lot composition
 and reserve prices could materially improve national revenue.  This demo app
 supports the proposal for a full‑scale **Diamond Auction Intelligence** platform
 by showing how machine learning can predict prices, estimate sale probabilities
 and recommend reserve prices using auction data.
-
-## License
-
-This code and dataset are provided under the MIT License for demonstration
-purposes only.  They are not authorised for use with real auction data without
-appropriate approvals from ODC and the relevant authorities.
