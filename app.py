@@ -312,10 +312,10 @@ def main():
         composition, bidder behaviour and market indices.
 
         Botswana’s economy is heavily dependent on diamonds, accounting for around
-        80 % of exports and roughly one‑third of fiscal revenue【706415933680656†L124-L131】.  In 2024, the Okavango Diamond Company’s
+        80 % of exports and roughly one‑third of fiscal revenue. In 2024, the Okavango Diamond Company’s
         revenues were about 60 % of the prior year’s levels due to a slump in the
-        diamond market【122746669238548†L224-L225】.  ODC currently sells most of its supply through approximately ten
-        online auctions per year【122746669238548†L198-L200】.  A data‑driven optimisation platform could therefore
+        diamond market.  ODC currently sells most of its supply through approximately ten
+        online auctions per year.  A data‑driven optimisation platform could therefore
         deliver meaningful revenue uplift for Botswana by refining lot mixes and
         reserve prices.
         """
