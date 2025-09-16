@@ -8,6 +8,11 @@ reserve price.  Because no confidential auction data are used,
 the app relies on a synthetic dataset generated for demonstration
 purposes.  It is intended as a proof‑of‑concept companion to
 the MASA proposal for the Diamond Auction Intelligence project.
+
+NB: This version does not include reinforcement learning component, since
+proper RL for auction reserve pricing requires an environment that updates
+reserves based on observed bids (which would be future work once real auction data
+and simulator details are available).
 """
 
 import os
