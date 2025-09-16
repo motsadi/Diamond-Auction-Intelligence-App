@@ -3,3 +3,4 @@ pandas>=1.5
 numpy>=1.21
 scikit-learn>=1.2
 altair>=5.0
+plotly>=5.6
