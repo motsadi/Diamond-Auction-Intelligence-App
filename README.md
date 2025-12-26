@@ -1,51 +1,138 @@
-# Diamond Auction Intelligence Demo
+# Diamond Auction Intelligence Platform
 
-This repository contains a proof‑of‑concept Streamlit app demonstrating how
-machine learning can be applied to rough‑diamond auction data.  It was
-developed to illustrate the potential impact of a **Diamond Auction Intelligence** platform for
-Botswana’s state‑owned Okavango Diamond Company (ODC).
+A production-grade machine learning platform for predicting diamond auction outcomes, built with Next.js, FastAPI, InstantDB, and Google Cloud Storage.
+
+## Architecture Overview
+
+This repository contains a full-stack application with the following components:
+
+- **`/web`** - Next.js (App Router) TypeScript frontend deployed on Vercel
+- **`/api`** - FastAPI backend deployed on Google Cloud Run
+- **`/streamlit-demo`** - Original Streamlit proof-of-concept (preserved for reference)
+
+### Tech Stack
+
+- **Frontend**: Next.js 14+ (App Router), TypeScript, React
+- **Backend**: FastAPI, Python 3.11+
+- **Database & Auth**: InstantDB
+- **Storage**: Google Cloud Storage (GCS) for dataset files
+- **ML**: scikit-learn (GradientBoosting, RandomForest, ExtraTrees)
 
 ## Features
 
-- Interactive exploration of a synthetic diamond‑auction dataset (500 lots).
-- Training of a price regression model (Gradient Boosting) and a sale‑
-  probability classifier.
-- Evaluation of model performance (R², MAE, accuracy).
-- Single‑lot prediction interface with a recommended reserve price based on
-  predicted price and sale probability.
-- Batch predictions for all lots with a downloadable CSV output.
-- Background information on why such a platform matters for Botswana,
-  including citations to recent news sources.
+- 🔐 **Authentication**: User signup/login via InstantDB
+- 📊 **Dataset Management**: Upload CSV files directly to GCS via signed URLs
+- 🤖 **ML Predictions**: Train and run models for price prediction and sale probability
+- 📈 **Analytics Dashboard**: KPIs, recent runs, prediction history
+- 🔍 **Exploratory Data Analysis**: Missingness, distributions, correlations
+- 📉 **Forecasting**: Select dataset, model, and horizon; generate predictions with charts
+- 👥 **Admin Panel**: Model registry, audit logs (admin-only)
 
-## Synthetic Dataset
+## Project Structure
 
-The file `synthetic_auction_data.csv` contains 500 rows of generated data
-emulating rough‑diamond auction lots.  Each row has the following fields:
+```
+.
+├── web/                    # Next.js frontend
+│   ├── app/               # App Router pages
+│   ├── components/        # React components
+│   ├── lib/              # Utilities (InstantDB client, API client)
+│   └── public/           # Static assets
+├── api/                   # FastAPI backend
+│   ├── ml/               # ML training and prediction modules
+│   ├── routes/           # API endpoints
+│   └── main.py          # FastAPI app entry point
+└── streamlit-demo/       # Original Streamlit demo (preserved)
+    ├── app.py
+    ├── requirements.txt
+    └── synthetic_auction_data.csv
+```
 
-| Column        | Description                                                   |
-|---------------|---------------------------------------------------------------|
-| `lot_id`      | Unique identifier for each lot                               |
-| `carat`       | Carat weight of the diamond lot                              |
-| `color`       | Colour grade (D–J)                                           |
-| `clarity`     | Clarity grade (IF–I1)                                        |
-| `viewings`    | Number of buyer viewings                                     |
-| `price_index` | Macro price index factor                                     |
-| `reserve_price` | Baseline reserve price for the lot                          |
-| `final_price` | Final hammer price (synthesised for demonstration)           |
-| `sold`        | Indicator whether the final price exceeded the reserve       |
+## Quick Start (Local Development)
 
-In a production setting, these fields would be replaced with actual ODC auction
-records (lot mix, reserve, bids, unsold flags) and additional variables such
-as bidder category or origin.
+### Prerequisites
 
-## Context and Need
+- Node.js 18+ and npm/yarn
+- Python 3.11+
+- Google Cloud account with GCS bucket
+- InstantDB account
 
-Botswana’s economy is heavily reliant on diamonds, accounting for
-**around 80 % of exports** and **roughly one‑third of fiscal revenue**.
-Weak demand in 2024 reduced Okavango Diamond Company’s revenues to about
-**60 % of 2023 levels**.  Because ODC sells most of its supply via a
-handful of online auctions each year, optimising lot composition
-and reserve prices could materially improve national revenue.  This demo app
-supports the proposal for a full‑scale **Diamond Auction Intelligence** platform
-by showing how machine learning can predict prices, estimate sale probabilities
-and recommend reserve prices using auction data.
+### 1. Backend Setup
+
+```bash
+cd api
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+Set environment variables (see `api/.env.example`):
+- `INSTANTDB_API_KEY`
+- `GCS_BUCKET_NAME`
+- `GOOGLE_APPLICATION_CREDENTIALS` (path to service account JSON)
+
+Run the API:
+```bash
+uvicorn main:app --reload --port 8000
+```
+
+### 2. Frontend Setup
+
+```bash
+cd web
+npm install
+```
+
+Set environment variables (see `web/.env.example`):
+- `NEXT_PUBLIC_INSTANTDB_APP_ID`
+- `NEXT_PUBLIC_API_URL` (e.g., `http://localhost:8000`)
+
+Run the frontend:
+```bash
+npm run dev
+```
+
+Visit `http://localhost:3000`
+
+### 3. First Admin User
+
+See `DEPLOYMENT.md` for instructions on bootstrapping the first admin user.
+
+## Deployment
+
+See `DEPLOYMENT.md` for detailed deployment instructions:
+- InstantDB setup
+- Google Cloud Run deployment
+- GCS bucket configuration
+- Vercel deployment
+
+## Dataset Format
+
+The platform expects CSV files with the following columns (at minimum):
+- `carat` - Carat weight (numeric)
+- `color` - Color grade (categorical: D-J)
+- `clarity` - Clarity grade (categorical: IF-I1)
+- `viewings` - Number of viewings (integer)
+- `price_index` - Price index factor (numeric)
+
+Optional columns for training:
+- `final_price` - Target for price prediction
+- `sold` - Target for sale probability (0/1)
+
+## ML Models
+
+The platform supports three model families:
+- **Gradient Boosting** (default)
+- **Random Forest**
+- **Extra Trees**
+
+Each model predicts:
+1. **Final Price** (regression)
+2. **Sale Probability** (classification)
+
+## License
+
+[Add your license here]
+
+## Contributing
+
+[Add contributing guidelines here]

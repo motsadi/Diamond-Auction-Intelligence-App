@@ -1,0 +1,26 @@
+VERCEL DEPLOYMENT - QUICK REFERENCE
+====================================
+
+ENVIRONMENT VARIABLES TO SET IN VERCEL:
+----------------------------------------
+NEXT_PUBLIC_API_URL = https://diamond-auction-api-782007384020.us-central1.run.app
+NEXT_PUBLIC_INSTANTDB_APP_ID = fdfdd9c1-9d26-46cb-8659-ca0547ed8a71
+
+DEPLOYMENT STEPS:
+-----------------
+1. Go to https://vercel.com and sign in
+2. Click "Add New Project"
+3. Import from Git OR Upload web folder
+4. Set Root Directory: web (or . if uploading web folder)
+5. BEFORE deploying, set environment variables (see above)
+6. Click "Deploy"
+7. Wait for build to complete
+8. Note your Vercel URL
+9. Run: .\update-cors.ps1 -VercelUrl https://your-app.vercel.app
+
+AFTER DEPLOYMENT:
+-----------------
+- Your app will be live at: https://your-app.vercel.app
+- Update CORS in Cloud Run using update-cors.ps1 script
+- Test the application by visiting the URL
+
