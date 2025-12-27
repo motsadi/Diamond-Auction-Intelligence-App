@@ -12,8 +12,7 @@ function HistoryContent() {
   // @ts-expect-error - useQuery type definition issue, works at runtime
   const { data, isLoading } = useQuery(db, {
     predictions: {
-      $: { where: { ownerId: user?.id || '' } },
-      $: { order: { createdAt: 'desc' } },
+      $: { where: { ownerId: user?.id || '' }, order: { createdAt: 'desc' } },
     },
     datasets: {},
   });

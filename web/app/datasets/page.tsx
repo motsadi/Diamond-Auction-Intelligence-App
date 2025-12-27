@@ -12,8 +12,7 @@ function DatasetsContent() {
   // @ts-expect-error - useQuery type definition issue, works at runtime
   const { data, isLoading } = useQuery(db, {
     datasets: {
-      $: { where: { ownerId: user?.id || '' } },
-      $: { order: { createdAt: 'desc' } },
+      $: { where: { ownerId: user?.id || '' }, order: { createdAt: 'desc' } },
     },
   });
 

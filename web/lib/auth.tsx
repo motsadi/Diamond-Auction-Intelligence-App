@@ -16,7 +16,16 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const { user, isLoading: instantLoading, signIn: instantSignIn, signUp: instantSignUp, signOut: instantSignOut } = useInstantAuth(db.auth);
+  // InstantDB's hook typing can differ by version; treat as any to avoid build-time TS failures.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const instantAuth: any = (useInstantAuth as any)(db.auth);
+  const {
+    user,
+    isLoading: instantLoading,
+    signIn: instantSignIn,
+    signUp: instantSignUp,
+    signOut: instantSignOut,
+  } = instantAuth;
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -52,6 +61,8 @@ export function useAuth() {
   }
   return context;
 }
+
+
 
 
 
