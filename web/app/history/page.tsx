@@ -5,12 +5,14 @@ import { Navbar } from '@/components/Navbar';
 import { db } from '@/lib/instant';
 import { useQuery } from '@instantdb/react';
 import Link from 'next/link';
+import { useAuth } from '@/lib/auth';
 
 function HistoryContent() {
+  const { user } = useAuth();
   // @ts-expect-error - useQuery type definition issue, works at runtime
   const { data, isLoading } = useQuery(db, {
     predictions: {
-      $: { where: { ownerId: db.auth.id() } },
+      $: { where: { ownerId: user?.id || '' } },
       $: { order: { createdAt: 'desc' } },
     },
     datasets: {},

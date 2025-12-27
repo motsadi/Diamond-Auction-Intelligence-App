@@ -9,17 +9,19 @@ import { apiClient } from '@/lib/api';
 import toast from 'react-hot-toast';
 import { useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
+import { useAuth } from '@/lib/auth';
 
 const Plot = dynamic(() => import('react-plotly.js'), { ssr: false });
 
 function ForecastContentInner() {
   const searchParams = useSearchParams();
   const preselectedDataset = searchParams.get('dataset');
+  const { user } = useAuth();
 
   // @ts-expect-error - useQuery type definition issue, works at runtime
   const { data, isLoading } = useQuery(db, {
     datasets: {
-      $: { where: { ownerId: db.auth.id() } },
+      $: { where: { ownerId: user?.id || '' } },
     },
   });
 

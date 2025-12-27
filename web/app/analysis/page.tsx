@@ -6,15 +6,17 @@ import { Navbar } from '@/components/Navbar';
 import { db } from '@/lib/instant';
 import { useQuery } from '@instantdb/react';
 import { useSearchParams } from 'next/navigation';
+import { useAuth } from '@/lib/auth';
 
 function AnalysisContentInner() {
   const searchParams = useSearchParams();
   const preselectedDataset = searchParams.get('dataset');
+  const { user } = useAuth();
 
   // @ts-expect-error - useQuery type definition issue, works at runtime
   const { data, isLoading } = useQuery(db, {
     datasets: {
-      $: { where: { ownerId: db.auth.id() } },
+      $: { where: { ownerId: user?.id || '' } },
     },
   });
 
