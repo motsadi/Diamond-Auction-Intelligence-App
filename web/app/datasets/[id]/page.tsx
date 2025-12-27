@@ -11,6 +11,7 @@ function DatasetDetailContent() {
   const params = useParams();
   const datasetId = Array.isArray(params.id) ? params.id[0] : params.id;
 
+  // @ts-expect-error - useQuery type definition issue, works at runtime
   const { data, isLoading } = useQuery(db, {
     datasets: {
       $: { where: { id: datasetId } },

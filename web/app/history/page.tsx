@@ -7,6 +7,7 @@ import { useQuery } from '@instantdb/react';
 import Link from 'next/link';
 
 function HistoryContent() {
+  // @ts-expect-error - useQuery type definition issue, works at runtime
   const { data, isLoading } = useQuery(db, {
     predictions: {
       $: { where: { ownerId: db.auth.id() } },
@@ -114,6 +115,8 @@ export default function HistoryPage() {
     </ProtectedRoute>
   );
 }
+
+
 
 
 

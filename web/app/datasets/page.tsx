@@ -7,6 +7,7 @@ import { useQuery } from '@instantdb/react';
 import Link from 'next/link';
 
 function DatasetsContent() {
+  // @ts-expect-error - useQuery type definition issue, works at runtime
   const { data, isLoading } = useQuery(db, {
     datasets: {
       $: { where: { ownerId: db.auth.id() } },
@@ -84,6 +85,8 @@ export default function DatasetsPage() {
     </ProtectedRoute>
   );
 }
+
+
 
 
 

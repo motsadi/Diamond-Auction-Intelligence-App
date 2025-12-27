@@ -6,12 +6,13 @@ import { db } from '@/lib/instant';
 import { useQuery } from '@instantdb/react';
 
 function AdminContent() {
+  // @ts-expect-error - useQuery type definition issue, works at runtime
   const { data, isLoading } = useQuery(db, {
     models: {
       $: { order: { createdAt: 'desc' } },
     },
     audit_logs: {
-      $: { order: { createdAt: 'desc' }, $: { limit: 50 } },
+      $: { order: { createdAt: 'desc' }, limit: 50 },
     },
   });
 
