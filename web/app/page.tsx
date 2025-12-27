@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import { useAuth } from '@/lib/auth';
 
 export default function HomePage() {
   return (
@@ -67,6 +66,8 @@ export default function HomePage() {
     </div>
   );
 }
+
+
 
 
 
