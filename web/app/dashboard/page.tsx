@@ -15,8 +15,7 @@ function DashboardContent() {
       $: { where: { ownerId: user?.id || '' } },
     },
     predictions: {
-      $: { where: { ownerId: user?.id || '' } },
-      $: { order: { createdAt: 'desc' }, $: { limit: 5 } },
+      $: { where: { ownerId: user?.id || '' }, order: { createdAt: 'desc' }, limit: 5 },
     },
   });
 
