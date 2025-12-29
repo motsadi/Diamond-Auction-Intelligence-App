@@ -1,9 +1,21 @@
 import { init } from '@instantdb/react';
 
-const APP_ID = process.env.NEXT_PUBLIC_INSTANTDB_APP_ID || '';
+// InstantDB App ID is safe to expose publicly (NEXT_PUBLIC_*). We still prefer env vars so
+// deployments can point at the correct InstantDB project.
+//
+// Note: Vercel has separate env var scopes (Production / Preview / Development). If you only set
+// this in Production, preview URLs will not have it and auth will fail.
+const DEFAULT_INSTANTDB_APP_ID = 'fdfdd9c1-9d26-46cb-8659-ca0547ed8a71';
+const APP_ID =
+  (process.env.NEXT_PUBLIC_INSTANTDB_APP_ID &&
+    process.env.NEXT_PUBLIC_INSTANTDB_APP_ID.trim()) ||
+  DEFAULT_INSTANTDB_APP_ID;
 
-if (!APP_ID) {
-  console.warn('NEXT_PUBLIC_INSTANTDB_APP_ID is not set');
+if (!process.env.NEXT_PUBLIC_INSTANTDB_APP_ID) {
+  console.warn(
+    'NEXT_PUBLIC_INSTANTDB_APP_ID is not set; falling back to DEFAULT_INSTANTDB_APP_ID. ' +
+      'Set it in Vercel for Production + Preview to avoid surprises.'
+  );
 }
 
 export const db = init({
@@ -64,6 +76,13 @@ export type AuditLog = {
   createdAt: number;
   meta?: Record<string, any>;
 };
+
+
+
+
+
+
+
 
 
 

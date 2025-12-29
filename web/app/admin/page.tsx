@@ -83,10 +83,11 @@ function AdminContent() {
         <div className="mt-8 bg-blue-50 p-6 rounded-lg">
           <h3 className="font-semibold mb-2">Bootstrap Admin User</h3>
           <p className="text-sm text-gray-700 mb-2">
-            To assign the first admin user, use the InstantDB console or run a script that updates the user's role field.
+            To assign the first admin user, use the InstantDB console or run a script that updates the{" "}
+            {"user's"} role field.
           </p>
           <code className="text-xs bg-white p-2 rounded block">
-            UPDATE users SET role = 'admin' WHERE email = 'your-email@example.com'
+            {"UPDATE users SET role = 'admin' WHERE email = 'your-email@example.com'"}
           </code>
         </div>
       </div>

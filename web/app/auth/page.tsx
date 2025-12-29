@@ -28,7 +28,16 @@ export default function AuthPage() {
         router.push('/dashboard');
       }
     } catch (error: any) {
-      toast.error(error.message || 'Authentication failed');
+      // InstantDB errors may not always populate `message` directly.
+      const message =
+        error?.body?.message ||
+        error?.response?.data?.message ||
+        error?.message ||
+        'Authentication failed';
+      // Keep a breadcrumb for debugging production issues.
+      // eslint-disable-next-line no-console
+      console.error('Auth failed:', error);
+      toast.error(message);
     } finally {
       setIsLoading(false);
     }
@@ -86,6 +95,11 @@ export default function AuthPage() {
     </div>
   );
 }
+
+
+
+
+
 
 
 
