@@ -3,35 +3,24 @@
 import { useState, Suspense } from 'react';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { Navbar } from '@/components/Navbar';
-import { db } from '@/lib/instant';
-import { useQuery } from '@instantdb/react';
 import { apiClient } from '@/lib/api';
 import toast from 'react-hot-toast';
 import { useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import { useAuth } from '@/lib/auth';
+import { staticDataset, STATIC_DATASET_ID } from '@/lib/staticDataset';
 
 const Plot = dynamic(() => import('react-plotly.js'), { ssr: false });
 
 function ForecastContentInner() {
   const searchParams = useSearchParams();
   const preselectedDataset = searchParams.get('dataset');
-  const { user } = useAuth();
 
-  // @ts-expect-error - useQuery type definition issue, works at runtime
-  const { data, isLoading } = useQuery(db, {
-    datasets: {
-      $: { where: { ownerId: user?.id || '' } },
-    },
-  });
-
-  const [selectedDataset, setSelectedDataset] = useState(preselectedDataset || '');
+  const datasets = [staticDataset];
+  const [selectedDataset, setSelectedDataset] = useState(preselectedDataset || STATIC_DATASET_ID);
   const [modelName, setModelName] = useState('Gradient Boosting');
   const [horizon, setHorizon] = useState(1);
   const [isRunning, setIsRunning] = useState(false);
   const [predictionResult, setPredictionResult] = useState<any>(null);
-
-  const datasets = data?.datasets || [];
   const modelOptions = ['Gradient Boosting', 'Random Forest', 'Extra Trees'];
 
   const handleRunForecast = async () => {
@@ -55,14 +44,6 @@ function ForecastContentInner() {
       setIsRunning(false);
     }
   };
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-lg">Loading...</div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-gray-50">

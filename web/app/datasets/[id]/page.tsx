@@ -3,30 +3,14 @@
 import { useParams } from 'next/navigation';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { Navbar } from '@/components/Navbar';
-import { db } from '@/lib/instant';
-import { useQuery } from '@instantdb/react';
 import Link from 'next/link';
+import { staticDataset, STATIC_DATASET_ID } from '@/lib/staticDataset';
 
 function DatasetDetailContent() {
   const params = useParams();
   const datasetId = Array.isArray(params.id) ? params.id[0] : params.id;
 
-  // @ts-expect-error - useQuery type definition issue, works at runtime
-  const { data, isLoading } = useQuery(db, {
-    datasets: {
-      $: { where: { id: datasetId } },
-    },
-  });
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-lg">Loading...</div>
-      </div>
-    );
-  }
-
-  const dataset = data?.datasets?.[0];
+  const dataset = datasetId === STATIC_DATASET_ID ? staticDataset : null;
 
   if (!dataset) {
     return (
@@ -68,7 +52,7 @@ function DatasetDetailContent() {
             </div>
             <div>
               <p className="text-sm text-gray-500">Storage</p>
-              <p className="font-semibold text-sm">GCS</p>
+              <p className="font-semibold text-sm">Local static dataset</p>
             </div>
           </div>
         </div>
@@ -96,16 +80,10 @@ function DatasetDetailContent() {
 
         <div className="flex space-x-4">
           <Link
-            href={`/forecast?dataset=${datasetId}`}
-            className="bg-indigo-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-indigo-700"
-          >
-            Run Forecast
-          </Link>
-          <Link
-            href={`/analysis?dataset=${datasetId}`}
+            href={`/api/static-dataset`}
             className="bg-white text-indigo-600 px-6 py-2 rounded-lg font-semibold border-2 border-indigo-600 hover:bg-indigo-50"
           >
-            Analyze Dataset
+            Download CSV
           </Link>
         </div>
       </div>

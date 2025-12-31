@@ -3,21 +3,23 @@
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { Navbar } from '@/components/Navbar';
 import { db } from '@/lib/instant';
-import { useQuery } from '@instantdb/react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth';
 
 function DashboardContent() {
-  const { user } = useAuth();
-  // @ts-expect-error - useQuery type definition issue, works at runtime
-  const { data, isLoading } = useQuery(db, {
-    datasets: {
-      $: { where: { ownerId: user?.id || '' } },
-    },
-    predictions: {
-      $: { where: { ownerId: user?.id || '' }, order: { createdAt: 'desc' }, limit: 5 },
-    },
-  });
+  const { user, isLoading: authLoading } = useAuth();
+
+  // Only run the query once we have a user; otherwise keep loading state.
+  const { data, isLoading } = user
+    ? db.useQuery({
+        datasets: {
+          $: { where: { ownerId: user.id } },
+        },
+        predictions: {
+          $: { where: { ownerId: user.id }, order: { createdAt: 'desc' }, limit: 5 },
+        },
+      })
+    : { data: null, isLoading: authLoading || true };
 
   if (isLoading) {
     return (

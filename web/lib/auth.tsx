@@ -1,14 +1,41 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext } from 'react';
 import { db } from './instant';
-import { useAuth as useInstantAuth } from '@instantdb/react';
+
+// Allowlist of emails permitted to sign up and sign in.
+const ALLOWED_EMAILS = new Set(
+  [
+    'Machel@odc.co.bw',
+    'setswalo.r.kefilwe@gmail.com',
+    'moses@odc.co.bw',
+    'Sethunya@odc.co.bw',
+    'st23019010@biust.ac.bw',
+    'ounas.saubi@gmail.com',
+    'Nthabiseng@odc.co.bw',
+    'Pamela@odc.co.bw',
+  ].map((email) => email.toLowerCase())
+);
+
+const normalizeEmail = (email: string) => email.trim().toLowerCase();
+
+const ensureAllowedEmail = (email: string) => {
+  const normalized = normalizeEmail(email);
+  // In development, allow any email so local testing is not blocked.
+  if (process.env.NODE_ENV === 'development') {
+    return normalized;
+  }
+  if (!ALLOWED_EMAILS.has(normalized)) {
+    throw new Error('This email is not allowed to access the app.');
+  }
+  return normalized;
+};
 
 interface AuthContextType {
   user: any;
   isLoading: boolean;
-  signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string) => Promise<void>;
+  requestCode: (email: string) => Promise<void>;
+  verifyCode: (email: string, code: string) => Promise<void>;
   signOut: () => Promise<void>;
   isAdmin: boolean;
 }
@@ -16,39 +43,28 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  // InstantDB's hook typing can differ by version; treat as any to avoid build-time TS failures.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const instantAuth: any = (useInstantAuth as any)(db.auth);
-  const {
-    user,
-    isLoading: instantLoading,
-    signIn: instantSignIn,
-    signUp: instantSignUp,
-    signOut: instantSignOut,
-  } = instantAuth;
-  const [isLoading, setIsLoading] = useState(true);
+  // InstantDB auth hook returns auth state only.
+  const { user, isLoading } = db.useAuth();
 
-  useEffect(() => {
-    setIsLoading(instantLoading);
-  }, [instantLoading]);
-
-  const signIn = async (email: string, password: string) => {
-    await instantSignIn({ email, password });
+  const requestCode = async (email: string) => {
+    const normalizedEmail = ensureAllowedEmail(email);
+    await db.auth.sendMagicCode({ email: normalizedEmail });
   };
 
-  const signUp = async (email: string, password: string) => {
-    await instantSignUp({ email, password });
+  const verifyCode = async (email: string, code: string) => {
+    const normalizedEmail = ensureAllowedEmail(email);
+    await db.auth.signInWithMagicCode({ email: normalizedEmail, code });
   };
 
   const signOut = async () => {
-    await instantSignOut();
+    await db.auth.signOut();
     localStorage.removeItem('auth_token');
   };
 
   const isAdmin = user?.role === 'admin';
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, signIn, signUp, signOut, isAdmin }}>
+    <AuthContext.Provider value={{ user, isLoading, requestCode, verifyCode, signOut, isAdmin }}>
       {children}
     </AuthContext.Provider>
   );

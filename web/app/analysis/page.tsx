@@ -3,28 +3,17 @@
 import { useState, Suspense } from 'react';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { Navbar } from '@/components/Navbar';
-import { db } from '@/lib/instant';
-import { useQuery } from '@instantdb/react';
 import { useSearchParams } from 'next/navigation';
-import { useAuth } from '@/lib/auth';
+import { staticDataset, STATIC_DATASET_ID } from '@/lib/staticDataset';
 
 function AnalysisContentInner() {
   const searchParams = useSearchParams();
   const preselectedDataset = searchParams.get('dataset');
-  const { user } = useAuth();
 
-  // @ts-expect-error - useQuery type definition issue, works at runtime
-  const { data, isLoading } = useQuery(db, {
-    datasets: {
-      $: { where: { ownerId: user?.id || '' } },
-    },
-  });
-
-  const [selectedDataset, setSelectedDataset] = useState(preselectedDataset || '');
+  const datasets = [staticDataset];
+  const [selectedDataset, setSelectedDataset] = useState(preselectedDataset || STATIC_DATASET_ID);
   const [analysisData, setAnalysisData] = useState<any>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-
-  const datasets = data?.datasets || [];
 
   const handleAnalyze = async () => {
     if (!selectedDataset) {
@@ -43,14 +32,6 @@ function AnalysisContentInner() {
       setIsAnalyzing(false);
     }, 1000);
   };
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-lg">Loading...</div>
-      </div>
-    );
-  }
 
   const selectedDs = datasets.find((ds: any) => ds.id === selectedDataset);
 
