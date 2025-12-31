@@ -8,6 +8,8 @@ export function Navbar() {
   const { user, signOut, isAdmin } = useAuth();
   const pathname = usePathname();
 
+  const streamlitUrl = process.env.NEXT_PUBLIC_STREAMLIT_URL;
+
   const navItems = [
     { href: '/dashboard', label: 'Dashboard' },
     { href: '/datasets', label: 'Datasets' },
@@ -42,6 +44,16 @@ export function Navbar() {
                   {item.label}
                 </Link>
               ))}
+              {streamlitUrl ? (
+                <a
+                  href={streamlitUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-100"
+                >
+                  Streamlit Demo
+                </a>
+              ) : null}
             </div>
           </div>
           <div className="flex items-center space-x-4">
