@@ -56,6 +56,80 @@ export interface PredictResponse {
   };
   previewRows?: any[];
   outputGcsObject?: string;
+  outputCsvData?: string; // Base64 encoded CSV for static dataset
+}
+
+export interface SinglePredictRequest {
+  datasetId: string;
+  modelName: string;
+  carat: number;
+  color: string;
+  clarity: string;
+  viewings: number;
+  price_index: number;
+}
+
+export interface SinglePredictResponse {
+  success: boolean;
+  pred_price: number;
+  pred_sale_proba: number;
+  recommended_reserve: number;
+}
+
+export interface OptimizeRequest {
+  datasetId: string;
+  modelName: string;
+  objective: 'max_price' | 'max_prob' | 'target';
+  n_samples?: number;
+  min_prob?: number;
+  target_price?: number;
+  target_prob?: number;
+  fixed_color?: string;
+  fixed_clarity?: string;
+}
+
+export interface OptimizeResponse {
+  success: boolean;
+  result?: {
+    carat: number;
+    viewings: number;
+    price_index: number;
+    color: string;
+    clarity: string;
+    pred_price: number;
+    pred_prob: number;
+    objective_score: number;
+  };
+  message?: string;
+}
+
+export interface SurfaceRequest {
+  datasetId: string;
+  modelName: string;
+  var_x: string;
+  var_y: string;
+  metric?: 'Final Price' | 'Sale Probability' | 'Expected Revenue';
+  n_points?: number;
+  fixed_color?: string;
+  fixed_clarity?: string;
+}
+
+export interface SurfaceResponse {
+  success: boolean;
+  x_grid: number[][];
+  y_grid: number[][];
+  z_values: number[][];
+}
+
+export interface ShapRequest {
+  datasetId: string;
+  modelName: string;
+}
+
+export interface ShapResponse {
+  success: boolean;
+  price_importance: Record<string, number>;
+  sale_importance: Record<string, number>;
 }
 
 export const apiClient = {
@@ -89,9 +163,37 @@ export const apiClient = {
     });
     return response.data;
   },
+
+  predictSingle: async (data: SinglePredictRequest): Promise<SinglePredictResponse> => {
+    const response = await api.post('/predict-single', data);
+    return response.data;
+  },
+
+  downloadPrediction: async (predictionId: string): Promise<Blob> => {
+    const response = await api.get(`/predictions/${predictionId}/download`, {
+      responseType: 'blob',
+    });
+    return response.data;
+  },
+
+  optimize: async (data: OptimizeRequest): Promise<OptimizeResponse> => {
+    const response = await api.post('/optimize', data);
+    return response.data;
+  },
+
+  surface: async (data: SurfaceRequest): Promise<SurfaceResponse> => {
+    const response = await api.post('/surface', data);
+    return response.data;
+  },
+
+  shap: async (data: ShapRequest): Promise<ShapResponse> => {
+    const response = await api.post('/shap', data);
+    return response.data;
+  },
 };
 
 export default api;
+
 
 
 

@@ -9,6 +9,19 @@ google-auth>=2.26.1
 python-dotenv>=1.0.0
 httpx>=0.25.0
 python-multipart>=0.0.6
+shap>=0.43.0
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
