@@ -5,6 +5,7 @@ import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { Navbar } from '@/components/Navbar';
 import { useSearchParams } from 'next/navigation';
 import { staticDataset, STATIC_DATASET_ID } from '@/lib/staticDataset';
+import toast from 'react-hot-toast';
 
 function AnalysisContentInner() {
   const searchParams = useSearchParams();
@@ -21,16 +22,24 @@ function AnalysisContentInner() {
     }
 
     setIsAnalyzing(true);
-    // In production, this would call the API to fetch analysis
-    // For now, we'll show a placeholder
-    setTimeout(() => {
-      setAnalysisData({
-        missingness: {},
-        distributions: {},
-        correlations: {},
+    try {
+      const res = await fetch('/api/analysis', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ datasetId: selectedDataset }),
       });
+      const json = await res.json();
+      if (!res.ok || !json?.success) {
+        throw new Error(json?.message || 'Analysis failed');
+      }
+      setAnalysisData(json);
+      toast.success('Analysis completed');
+    } catch (e: any) {
+      toast.error(e?.message || 'Network error');
+      setAnalysisData(null);
+    } finally {
       setIsAnalyzing(false);
-    }, 1000);
+    }
   };
 
   const selectedDs = datasets.find((ds: any) => ds.id === selectedDataset);
@@ -86,23 +95,84 @@ function AnalysisContentInner() {
           <div className="space-y-6">
             <div className="bg-white p-6 rounded-lg shadow-md">
               <h2 className="text-xl font-semibold mb-4">Missing Values</h2>
-              <p className="text-gray-600">
-                Analysis of missing values will be displayed here. This feature requires API integration to fetch data from GCS.
-              </p>
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-gray-500">
+                      <th className="py-2 pr-6">Column</th>
+                      <th className="py-2">Missing</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.entries(analysisData.missingness || {}).map(([col, count]: any) => (
+                      <tr key={col} className="border-t">
+                        <td className="py-2 pr-6 font-medium text-gray-900">{col}</td>
+                        <td className="py-2 text-gray-700">{count}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
 
             <div className="bg-white p-6 rounded-lg shadow-md">
               <h2 className="text-xl font-semibold mb-4">Distributions</h2>
-              <p className="text-gray-600">
-                Distribution charts for numeric columns will be displayed here.
-              </p>
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-gray-500">
+                      <th className="py-2 pr-6">Column</th>
+                      <th className="py-2 pr-6">Count</th>
+                      <th className="py-2 pr-6">Mean</th>
+                      <th className="py-2 pr-6">Std</th>
+                      <th className="py-2 pr-6">Min</th>
+                      <th className="py-2">Max</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.entries(analysisData.distributions || {}).map(([col, d]: any) => (
+                      <tr key={col} className="border-t">
+                        <td className="py-2 pr-6 font-medium text-gray-900">{col}</td>
+                        <td className="py-2 pr-6 text-gray-700">{d.count}</td>
+                        <td className="py-2 pr-6 text-gray-700">{Number(d.mean).toFixed(2)}</td>
+                        <td className="py-2 pr-6 text-gray-700">{Number(d.std).toFixed(2)}</td>
+                        <td className="py-2 pr-6 text-gray-700">{Number(d.min).toFixed(2)}</td>
+                        <td className="py-2 text-gray-700">{Number(d.max).toFixed(2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
 
             <div className="bg-white p-6 rounded-lg shadow-md">
               <h2 className="text-xl font-semibold mb-4">Correlations</h2>
-              <p className="text-gray-600">
-                Correlation matrix will be displayed here.
-              </p>
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-xs">
+                  <thead>
+                    <tr>
+                      <th className="py-2 pr-4 text-left text-gray-500"> </th>
+                      {(analysisData.correlations?.columns || []).map((c: string) => (
+                        <th key={c} className="py-2 px-2 text-left text-gray-500 whitespace-nowrap">
+                          {c}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(analysisData.correlations?.columns || []).map((rowName: string, i: number) => (
+                      <tr key={rowName} className="border-t">
+                        <td className="py-2 pr-4 font-medium text-gray-900 whitespace-nowrap">{rowName}</td>
+                        {(analysisData.correlations?.matrix?.[i] || []).map((v: number, j: number) => (
+                          <td key={`${i}-${j}`} className="py-2 px-2 text-gray-700">
+                            {Number(v).toFixed(2)}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}

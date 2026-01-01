@@ -1,9 +1,11 @@
 import axios from 'axios';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+// In production (Vercel), we want requests to hit the same deployment by default.
+// If you deploy the Python API separately, set NEXT_PUBLIC_API_URL to that base URL.
+const API_URL = (process.env.NEXT_PUBLIC_API_URL || '').trim();
 
 const api = axios.create({
-  baseURL: API_URL,
+  baseURL: API_URL || '',
   headers: {
     'Content-Type': 'application/json',
   },
