@@ -44,7 +44,20 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   // InstantDB auth hook returns auth state only.
-  const { user, isLoading } = db.useAuth();
+  const { user: authUser, isLoading: authLoading } = db.useAuth();
+  const userId = authUser?.id ?? '';
+
+  // Fetch the user's profile record (contains role) from the `users` collection.
+  // Note: hooks must be called unconditionally; when not signed in we query with an empty id.
+  const { data: profileData, isLoading: profileLoading } = db.useQuery({
+    users: {
+      $: { where: { id: userId } },
+    },
+  });
+
+  const profile = profileData?.users?.[0];
+  const user = authUser ? { ...authUser, role: profile?.role } : null;
+  const isLoading = authLoading || (Boolean(authUser) && profileLoading);
 
   const requestCode = async (email: string) => {
     const normalizedEmail = ensureAllowedEmail(email);

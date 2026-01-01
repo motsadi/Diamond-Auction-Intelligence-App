@@ -3,17 +3,11 @@
 import { ProtectedRoute, AdminRoute } from '@/components/ProtectedRoute';
 import { Navbar } from '@/components/Navbar';
 import { db } from '@/lib/instant';
-import { useQuery } from '@instantdb/react';
 
 function AdminContent() {
-  // @ts-expect-error - useQuery type definition issue, works at runtime
-  const { data, isLoading } = useQuery(db, {
-    models: {
-      $: { order: { createdAt: 'desc' } },
-    },
-    audit_logs: {
-      $: { order: { createdAt: 'desc' }, limit: 50 },
-    },
+  const { data, isLoading } = db.useQuery({
+    models: {},
+    audit_logs: {},
   });
 
   if (isLoading) {
@@ -24,8 +18,13 @@ function AdminContent() {
     );
   }
 
-  const models = data?.models || [];
-  const auditLogs = data?.audit_logs || [];
+  const models = (data?.models || [])
+    .slice()
+    .sort((a: any, b: any) => (b.createdAt || 0) - (a.createdAt || 0));
+  const auditLogs = (data?.audit_logs || [])
+    .slice()
+    .sort((a: any, b: any) => (b.createdAt || 0) - (a.createdAt || 0))
+    .slice(0, 50);
 
   return (
     <div className="min-h-screen bg-gray-50">

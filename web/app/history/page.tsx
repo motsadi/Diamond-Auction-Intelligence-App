@@ -3,16 +3,15 @@
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { Navbar } from '@/components/Navbar';
 import { db } from '@/lib/instant';
-import { useQuery } from '@instantdb/react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth';
 
 function HistoryContent() {
   const { user } = useAuth();
-  // @ts-expect-error - useQuery type definition issue, works at runtime
-  const { data, isLoading } = useQuery(db, {
+  const ownerId = user?.id ?? '';
+  const { data, isLoading } = db.useQuery({
     predictions: {
-      $: { where: { ownerId: user?.id || '' }, order: { createdAt: 'desc' } },
+      $: { where: { ownerId } },
     },
     datasets: {},
   });
@@ -25,7 +24,9 @@ function HistoryContent() {
     );
   }
 
-  const predictions = data?.predictions || [];
+  const predictions = (data?.predictions || [])
+    .slice()
+    .sort((a: any, b: any) => (b.createdAt || 0) - (a.createdAt || 0));
   const datasets = data?.datasets || [];
   const datasetMap = new Map(datasets.map((ds: any) => [ds.id, ds]));
 

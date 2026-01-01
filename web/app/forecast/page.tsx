@@ -8,8 +8,12 @@ import toast from 'react-hot-toast';
 import { useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { staticDataset, STATIC_DATASET_ID } from '@/lib/staticDataset';
+import type { PlotParams } from 'react-plotly.js';
 
-const Plot = dynamic(() => import('react-plotly.js'), { ssr: false });
+const Plot = dynamic<PlotParams>(
+  () => import('react-plotly.js').then((mod) => mod.default),
+  { ssr: false }
+);
 
 function ForecastContentInner() {
   const searchParams = useSearchParams();

@@ -3,28 +3,22 @@
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { Navbar } from '@/components/Navbar';
 import { db } from '@/lib/instant';
-import { useQuery } from '@instantdb/react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth';
 
 function DashboardContent() {
-  const { user, isLoading: authLoading } = useAuth();
+  const { user } = useAuth();
+  const ownerId = user?.id ?? '';
 
-  // Only run the query once we have a user; otherwise keep loading state.
-  const query = user
-    ? {
-        datasets: {
-          $: { where: { ownerId: user.id } },
-        },
-        predictions: {
-          $: { where: { ownerId: user.id } },
-        },
-      }
-    : null;
-  
-  const { data, isLoading } = query
-    ? useQuery(db, query)
-    : { data: null, isLoading: authLoading || true };
+  // Note: call hooks unconditionally (no conditional `useQuery`).
+  const { data, isLoading } = db.useQuery({
+    datasets: {
+      $: { where: { ownerId } },
+    },
+    predictions: {
+      $: { where: { ownerId } },
+    },
+  });
 
   if (isLoading) {
     return (
