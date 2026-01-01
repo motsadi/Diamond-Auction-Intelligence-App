@@ -11,16 +11,19 @@ function DashboardContent() {
   const { user, isLoading: authLoading } = useAuth();
 
   // Only run the query once we have a user; otherwise keep loading state.
-  // @ts-expect-error - useQuery type definition issue, works at runtime
-  const { data, isLoading } = user
-    ? useQuery(db, {
+  const query = user
+    ? ({
         datasets: {
           $: { where: { ownerId: user.id } },
         },
         predictions: {
           $: { where: { ownerId: user.id }, order: { createdAt: 'desc' }, limit: 5 },
         },
-      })
+      } as any)
+    : null;
+  
+  const { data, isLoading } = query
+    ? useQuery(db, query)
     : { data: null, isLoading: authLoading || true };
 
   if (isLoading) {
