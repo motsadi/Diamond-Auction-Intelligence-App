@@ -2,7 +2,18 @@ import axios from 'axios';
 
 // In production (Vercel), we want requests to hit the same deployment by default.
 // If you deploy the Python API separately, set NEXT_PUBLIC_API_URL to that base URL.
-const API_URL = (process.env.NEXT_PUBLIC_API_URL || '').trim();
+//
+// NOTE: Many "Network error" reports on Vercel are caused by leaving this env var set to
+// `http://localhost:8000` (which only works locally). We guard against that by falling back
+// to same-origin for any localhost-style values when running in the browser.
+const RAW_API_URL = (process.env.NEXT_PUBLIC_API_URL || '').trim();
+const isLocalhostUrl = (url: string) =>
+  /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(url);
+
+const API_URL =
+  typeof window !== 'undefined' && isLocalhostUrl(RAW_API_URL)
+    ? ''
+    : RAW_API_URL;
 
 const api = axios.create({
   baseURL: API_URL || '',
