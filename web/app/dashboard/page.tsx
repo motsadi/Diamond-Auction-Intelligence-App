@@ -12,14 +12,14 @@ function DashboardContent() {
 
   // Only run the query once we have a user; otherwise keep loading state.
   const query = user
-    ? ({
+    ? {
         datasets: {
           $: { where: { ownerId: user.id } },
         },
         predictions: {
-          $: { where: { ownerId: user.id }, order: { createdAt: 'desc' }, limit: 5 },
+          $: { where: { ownerId: user.id } },
         },
-      } as any)
+      }
     : null;
   
   const { data, isLoading } = query
@@ -35,7 +35,11 @@ function DashboardContent() {
   }
 
   const datasets = data?.datasets || [];
-  const recentPredictions = data?.predictions || [];
+  const recentPredictions =
+    (data?.predictions || [])
+      .slice()
+      .sort((a: any, b: any) => (b.createdAt || 0) - (a.createdAt || 0))
+      .slice(0, 5);
 
   return (
     <div className="min-h-screen bg-gray-50">
