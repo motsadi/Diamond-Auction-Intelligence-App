@@ -1,7 +1,7 @@
 'use client';
 
 import { ProtectedRoute, AdminRoute } from '@/components/ProtectedRoute';
-import { Navbar } from '@/components/Navbar';
+import { AppShell } from '@/components/AppShell';
 import { db } from '@/lib/instant';
 
 function AdminContent() {
@@ -27,13 +27,11 @@ function AdminContent() {
     .slice(0, 50);
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <h1 className="text-3xl font-bold mb-8">Admin Panel</h1>
+    <AppShell title="Admin" subtitle="Model registry and audit logs">
+      <h1 className="text-2xl font-bold text-gray-900 mb-6">Admin Panel</h1>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <div className="bg-white p-6 rounded-lg shadow-md">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <div className="card p-6">
             <h2 className="text-xl font-semibold mb-4">Model Registry</h2>
             {models.length === 0 ? (
               <p className="text-gray-500">No models registered yet.</p>
@@ -57,7 +55,7 @@ function AdminContent() {
             )}
           </div>
 
-          <div className="bg-white p-6 rounded-lg shadow-md">
+          <div className="card p-6">
             <h2 className="text-xl font-semibold mb-4">Audit Logs</h2>
             {auditLogs.length === 0 ? (
               <p className="text-gray-500">No audit logs yet.</p>
@@ -79,7 +77,7 @@ function AdminContent() {
           </div>
         </div>
 
-        <div className="mt-8 bg-blue-50 p-6 rounded-lg">
+        <div className="mt-8 rounded-xl bg-blue-50 p-6">
           <h3 className="font-semibold mb-2">Bootstrap Admin User</h3>
           <p className="text-sm text-gray-700 mb-2">
             To assign the first admin user, use the InstantDB console or run a script that updates the{" "}
@@ -89,8 +87,7 @@ function AdminContent() {
             {"UPDATE users SET role = 'admin' WHERE email = 'your-email@example.com'"}
           </code>
         </div>
-      </div>
-    </div>
+    </AppShell>
   );
 }
 

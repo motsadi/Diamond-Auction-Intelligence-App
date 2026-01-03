@@ -1,7 +1,7 @@
 'use client';
 
 import { ProtectedRoute } from '@/components/ProtectedRoute';
-import { Navbar } from '@/components/Navbar';
+import { AppShell } from '@/components/AppShell';
 import { db } from '@/lib/instant';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth';
@@ -36,21 +36,32 @@ function DashboardContent() {
       .slice(0, 5);
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <h1 className="text-3xl font-bold mb-8">Dashboard</h1>
+    <AppShell title="Overview" subtitle="Operational snapshot and quick links">
+      <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <div className="text-sm text-gray-600">Okavango Diamond Company</div>
+          <h1 className="text-2xl font-bold text-gray-900">Today’s overview</h1>
+        </div>
+        <div className="flex gap-2">
+          <Link href="/forecast" className="btn-primary">
+            Run forecast
+          </Link>
+          <Link href="/reports" className="btn-secondary">
+            Generate report
+          </Link>
+        </div>
+      </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-white p-6 rounded-lg shadow-md">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <div className="card p-6">
             <h3 className="text-lg font-semibold text-gray-700 mb-2">Total Datasets</h3>
             <p className="text-3xl font-bold text-indigo-600">{datasets.length}</p>
           </div>
-          <div className="bg-white p-6 rounded-lg shadow-md">
+          <div className="card p-6">
             <h3 className="text-lg font-semibold text-gray-700 mb-2">Total Predictions</h3>
             <p className="text-3xl font-bold text-indigo-600">{recentPredictions.length}</p>
           </div>
-          <div className="bg-white p-6 rounded-lg shadow-md">
+          <div className="card p-6">
             <h3 className="text-lg font-semibold text-gray-700 mb-2">Recent Activity</h3>
             <p className="text-3xl font-bold text-indigo-600">
               {recentPredictions.length > 0 ? 'Active' : 'None'}
@@ -59,7 +70,7 @@ function DashboardContent() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <div className="bg-white p-6 rounded-lg shadow-md">
+          <div className="card p-6">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-semibold">Recent Datasets</h2>
               <Link href="/datasets" className="text-indigo-600 hover:underline text-sm">
@@ -82,7 +93,7 @@ function DashboardContent() {
             )}
           </div>
 
-          <div className="bg-white p-6 rounded-lg shadow-md">
+          <div className="card p-6">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-semibold">Recent Predictions</h2>
               <Link href="/history" className="text-indigo-600 hover:underline text-sm">
@@ -114,8 +125,7 @@ function DashboardContent() {
             )}
           </div>
         </div>
-      </div>
-    </div>
+    </AppShell>
   );
 }
 

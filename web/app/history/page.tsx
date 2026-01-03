@@ -1,7 +1,7 @@
 'use client';
 
 import { ProtectedRoute } from '@/components/ProtectedRoute';
-import { Navbar } from '@/components/Navbar';
+import { AppShell } from '@/components/AppShell';
 import { db } from '@/lib/instant';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth';
@@ -31,82 +31,61 @@ function HistoryContent() {
   const datasetMap = new Map(datasets.map((ds: any) => [ds.id, ds]));
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <h1 className="text-3xl font-bold mb-8">Prediction History</h1>
+    <AppShell title="History" subtitle="Audit trail of forecasts and outcomes">
+      <h1 className="text-2xl font-bold text-gray-900 mb-6">Prediction History</h1>
 
-        {predictions.length === 0 ? (
-          <div className="bg-white p-8 rounded-lg shadow-md text-center">
-            <p className="text-gray-500 mb-4">No predictions yet.</p>
-            <Link
-              href="/forecast"
-              className="text-indigo-600 hover:underline font-semibold"
-            >
-              Run your first forecast
-            </Link>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {predictions.map((pred: any) => {
-              const dataset = datasetMap.get(pred.datasetId);
-              return (
-                <div key={pred.id} className="bg-white p-6 rounded-lg shadow-md">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h3 className="text-lg font-semibold mb-2">
-                        {pred.modelName} Prediction
-                      </h3>
-                      <p className="text-sm text-gray-500 mb-2">
-                        Dataset: {dataset?.name || 'Unknown'} | {new Date(pred.createdAt).toLocaleString()}
-                      </p>
-                      {pred.horizon && (
-                        <p className="text-sm text-gray-500">Horizon: {pred.horizon}</p>
-                      )}
-                    </div>
-                    {pred.metrics && (
-                      <div className="text-right">
-                        {pred.metrics.price_r2 !== undefined && (
-                          <p className="text-sm">
-                            <span className="text-gray-500">R²:</span>{' '}
-                            <span className="font-semibold">{pred.metrics.price_r2.toFixed(3)}</span>
-                          </p>
-                        )}
-                        {pred.metrics.price_mae !== undefined && (
-                          <p className="text-sm">
-                            <span className="text-gray-500">MAE:</span>{' '}
-                            <span className="font-semibold">{pred.metrics.price_mae.toFixed(2)}</span>
-                          </p>
-                        )}
-                        {pred.metrics.sale_accuracy !== undefined && (
-                          <p className="text-sm">
-                            <span className="text-gray-500">Accuracy:</span>{' '}
-                            <span className="font-semibold">{(pred.metrics.sale_accuracy * 100).toFixed(1)}%</span>
-                          </p>
-                        )}
-                      </div>
-                    )}
+      {predictions.length === 0 ? (
+        <div className="card p-8 text-center">
+          <p className="text-gray-600 mb-4">No predictions yet.</p>
+          <Link href="/forecast" className="btn-primary">
+            Run your first forecast
+          </Link>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {predictions.map((pred: any) => {
+            const dataset = datasetMap.get(pred.datasetId);
+            return (
+              <div key={pred.id} className="card p-6">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold mb-1 text-gray-900">{pred.modelName} Prediction</h3>
+                    <p className="text-sm text-gray-500">
+                      Dataset: {dataset?.name || 'Unknown'} • {new Date(pred.createdAt).toLocaleString()}
+                    </p>
+                    {pred.horizon ? <p className="text-sm text-gray-500 mt-1">Horizon: {pred.horizon}</p> : null}
                   </div>
-                  {pred.outputGcsObject && (
-                    <div className="mt-4 pt-4 border-t">
-                      <button
-                        onClick={() => {
-                          // In production, generate signed download URL
-                          alert('Download feature coming soon');
-                        }}
-                        className="text-indigo-600 hover:underline text-sm"
-                      >
-                        Download Results
-                      </button>
+                  {pred.metrics ? (
+                    <div className="sm:text-right text-sm">
+                      {pred.metrics.price_r2 !== undefined ? (
+                        <div>
+                          <span className="text-gray-500">R²:</span>{' '}
+                          <span className="font-semibold text-gray-900">{pred.metrics.price_r2.toFixed(3)}</span>
+                        </div>
+                      ) : null}
+                      {pred.metrics.price_mae !== undefined ? (
+                        <div>
+                          <span className="text-gray-500">MAE:</span>{' '}
+                          <span className="font-semibold text-gray-900">{pred.metrics.price_mae.toFixed(2)}</span>
+                        </div>
+                      ) : null}
+                      {pred.metrics.sale_accuracy !== undefined ? (
+                        <div>
+                          <span className="text-gray-500">Accuracy:</span>{' '}
+                          <span className="font-semibold text-gray-900">
+                            {(pred.metrics.sale_accuracy * 100).toFixed(1)}%
+                          </span>
+                        </div>
+                      ) : null}
                     </div>
-                  )}
+                  ) : null}
                 </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </AppShell>
   );
 }
 

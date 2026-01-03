@@ -1,7 +1,7 @@
 'use client';
 
 import { ProtectedRoute } from '@/components/ProtectedRoute';
-import { Navbar } from '@/components/Navbar';
+import { AppShell } from '@/components/AppShell';
 import Link from 'next/link';
 import { staticDataset } from '@/lib/staticDataset';
 
@@ -9,40 +9,42 @@ function DatasetsContent() {
   const datasets = [staticDataset];
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold">Datasets</h1>
+    <AppShell title="Datasets" subtitle="Source data for forecasts and reports">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Datasets</h1>
           <div className="text-sm text-gray-600">
-            Uploads are disabled. Using the built-in synthetic dataset.
+            Uploads are disabled in this demo. Using the built-in synthetic dataset.
           </div>
         </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {datasets.map((dataset: any) => (
-            <Link
-              key={dataset.id}
-              href={`/datasets/${dataset.id}`}
-              className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow"
-            >
-              <h3 className="text-xl font-semibold mb-2">{dataset.name}</h3>
-              <p className="text-sm text-gray-500 mb-4">
-                {new Date(dataset.createdAt).toLocaleDateString()}
-              </p>
-              <div className="space-y-1 text-sm">
-                <p className="text-gray-600">
-                  <span className="font-medium">Rows:</span> {dataset.rowCount}
-                </p>
-                <p className="text-gray-600">
-                  <span className="font-medium">Columns:</span> {dataset.columns?.length || 0}
-                </p>
-              </div>
-            </Link>
-          ))}
-        </div>
+        <Link href="/reports" className="btn-secondary">
+          Generate report
+        </Link>
       </div>
-    </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {datasets.map((dataset: any) => (
+          <Link
+            key={dataset.id}
+            href={`/datasets/${dataset.id}`}
+            className="card p-6 hover:shadow-md transition-shadow"
+          >
+            <h3 className="text-lg font-semibold mb-1 text-gray-900">{dataset.name}</h3>
+            <p className="text-sm text-gray-500 mb-4">
+              {new Date(dataset.createdAt).toLocaleDateString()}
+            </p>
+            <div className="space-y-1 text-sm">
+              <p className="text-gray-700">
+                <span className="font-medium">Rows:</span> {dataset.rowCount}
+              </p>
+              <p className="text-gray-700">
+                <span className="font-medium">Columns:</span> {dataset.columns?.length || 0}
+              </p>
+            </div>
+          </Link>
+        ))}
+      </div>
+    </AppShell>
   );
 }
 

@@ -2,7 +2,7 @@
 
 import { useState, Suspense } from 'react';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
-import { Navbar } from '@/components/Navbar';
+import { AppShell } from '@/components/AppShell';
 import { useSearchParams } from 'next/navigation';
 import { staticDataset, STATIC_DATASET_ID } from '@/lib/staticDataset';
 import toast from 'react-hot-toast';
@@ -45,12 +45,10 @@ function AnalysisContentInner() {
   const selectedDs = datasets.find((ds: any) => ds.id === selectedDataset);
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <h1 className="text-3xl font-bold mb-8">Exploratory Data Analysis</h1>
+    <AppShell title="Analysis" subtitle="Missingness, distributions, correlations">
+      <h1 className="text-2xl font-bold text-gray-900 mb-6">Exploratory Data Analysis</h1>
 
-        <div className="bg-white p-6 rounded-lg shadow-md mb-6">
+        <div className="card p-6 mb-6">
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -84,7 +82,7 @@ function AnalysisContentInner() {
             <button
               onClick={handleAnalyze}
               disabled={isAnalyzing || !selectedDataset}
-              className="w-full bg-indigo-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-indigo-700 disabled:opacity-50"
+              className="btn-primary w-full"
             >
               {isAnalyzing ? 'Analyzing...' : 'Run Analysis'}
             </button>
@@ -115,7 +113,7 @@ function AnalysisContentInner() {
               </div>
             </div>
 
-            <div className="bg-white p-6 rounded-lg shadow-md">
+            <div className="card p-6">
               <h2 className="text-xl font-semibold mb-4">Distributions</h2>
               <div className="overflow-x-auto">
                 <table className="min-w-full text-sm">
@@ -145,7 +143,7 @@ function AnalysisContentInner() {
               </div>
             </div>
 
-            <div className="bg-white p-6 rounded-lg shadow-md">
+            <div className="card p-6">
               <h2 className="text-xl font-semibold mb-4">Correlations</h2>
               <div className="overflow-x-auto">
                 <table className="min-w-full text-xs">
@@ -176,8 +174,7 @@ function AnalysisContentInner() {
             </div>
           </div>
         )}
-      </div>
-    </div>
+    </AppShell>
   );
 }
 

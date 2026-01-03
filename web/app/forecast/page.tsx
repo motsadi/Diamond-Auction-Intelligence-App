@@ -2,7 +2,7 @@
 
 import { useState, Suspense } from 'react';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
-import { Navbar } from '@/components/Navbar';
+import { AppShell } from '@/components/AppShell';
 import { apiClient, OptimizeRequest, SurfaceRequest, ShapRequest } from '@/lib/api';
 import toast from 'react-hot-toast';
 import { useSearchParams } from 'next/navigation';
@@ -213,10 +213,11 @@ function ForecastContentInner() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <h1 className="text-3xl font-bold mb-8">Run Forecast</h1>
+    <AppShell
+      title="Prediction & Demand Forecasting"
+      subtitle="Forecasts, optimization, solution surfaces, and explainability"
+    >
+        <h1 className="text-2xl font-bold text-gray-900 mb-6">Prediction & Demand Forecasting</h1>
 
         <div className="bg-white p-6 rounded-lg shadow-md mb-6">
           <div className="space-y-4">
@@ -891,8 +892,7 @@ function ForecastContentInner() {
             </div>
           )}
         </div>
-      </div>
-    </div>
+    </AppShell>
   );
 }
 
