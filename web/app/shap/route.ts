@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { loadTrainedSyntheticAuction } from '@/lib/server/syntheticAuction';
-import { STATIC_DATASET_ID } from '@/lib/staticDataset';
+import { STATIC_DATASET_ID, US_DIAMONDS_DATASET_ID } from '@/lib/staticDataset';
+import { loadTrainedUSDiamonds, getUSDiamondsImportance } from '@/lib/server/usDiamonds';
+import { parseUSDiamondsModelName } from '@/lib/server/datasetRegistry';
 
 export const runtime = 'nodejs';
 
@@ -23,15 +25,16 @@ export async function POST(req: Request) {
     const body = await req.json();
     const datasetId = String(body?.datasetId ?? '');
     if (!datasetId) return NextResponse.json({ success: false, message: 'datasetId is required' }, { status: 400 });
+
+    if (datasetId === US_DIAMONDS_DATASET_ID) {
+      const trained = await loadTrainedUSDiamonds();
+      const model = parseUSDiamondsModelName(body?.modelName);
+      const price_importance = await getUSDiamondsImportance(trained, model);
+      return NextResponse.json({ success: true, price_importance, sale_importance: {} });
+    }
+
     if (datasetId !== STATIC_DATASET_ID) {
-      return NextResponse.json(
-        {
-          success: false,
-          message:
-            'Only the built-in synthetic dataset is available in this deployment. Set NEXT_PUBLIC_API_URL to use an external API for uploaded datasets.',
-        },
-        { status: 400 }
-      );
+      return NextResponse.json({ success: false, message: 'Unknown datasetId' }, { status: 400 });
     }
 
     const trained = await loadTrainedSyntheticAuction();

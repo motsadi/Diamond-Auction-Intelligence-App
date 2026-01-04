@@ -3,10 +3,10 @@
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { AppShell } from '@/components/AppShell';
 import Link from 'next/link';
-import { staticDataset } from '@/lib/staticDataset';
+import { staticDataset, usDiamondsDataset } from '@/lib/staticDataset';
 
 function DatasetsContent() {
-  const datasets = [staticDataset];
+  const datasets = [staticDataset, usDiamondsDataset];
 
   return (
     <AppShell title="Datasets" subtitle="Source data for forecasts and reports">
@@ -14,7 +14,7 @@ function DatasetsContent() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Datasets</h1>
           <div className="text-sm text-gray-600">
-            Uploads are disabled in this demo. Using the built-in synthetic dataset.
+            Uploads are disabled in this demo. Using built-in datasets.
           </div>
         </div>
         <Link href="/reports" className="btn-secondary">

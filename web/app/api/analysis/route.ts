@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { loadTrainedSyntheticAuction } from '@/lib/server/syntheticAuction';
-import { STATIC_DATASET_ID } from '@/lib/staticDataset';
+import { STATIC_DATASET_ID, US_DIAMONDS_DATASET_ID } from '@/lib/staticDataset';
+import { loadTrainedUSDiamonds } from '@/lib/server/usDiamonds';
 
 export const runtime = 'nodejs';
 
@@ -39,21 +40,23 @@ export async function POST(req: Request) {
     const body = await req.json();
     const datasetId = String(body?.datasetId ?? '');
     if (!datasetId) return NextResponse.json({ success: false, message: 'datasetId is required' }, { status: 400 });
-    if (datasetId !== STATIC_DATASET_ID) {
-      return NextResponse.json(
-        {
-          success: false,
-          message:
-            'Only the built-in synthetic dataset is available in this deployment. Set NEXT_PUBLIC_API_URL to use an external API for uploaded datasets.',
-        },
-        { status: 400 }
-      );
+
+    // Dataset routing
+    let rows: any[] = [];
+    let numericColumns: string[] = [];
+
+    if (datasetId === STATIC_DATASET_ID) {
+      const trained = await loadTrainedSyntheticAuction();
+      rows = trained.rows as any[];
+      numericColumns = ['carat', 'viewings', 'price_index', 'reserve_price', 'final_price', 'sold'];
+    } else if (datasetId === US_DIAMONDS_DATASET_ID) {
+      const trained = await loadTrainedUSDiamonds();
+      rows = trained.rows as any[];
+      numericColumns = ['carat', 'depth', 'table', 'x', 'y', 'z', 'price'];
+    } else {
+      return NextResponse.json({ success: false, message: 'Unknown datasetId' }, { status: 400 });
     }
 
-    const trained = await loadTrainedSyntheticAuction();
-    const rows = trained.rows;
-
-    const numericColumns = ['carat', 'viewings', 'price_index', 'reserve_price', 'final_price', 'sold'] as const;
     const missingness: Record<string, number> = {};
     for (const col of numericColumns) missingness[col] = 0;
     // With the synthetic dataset we expect no missingness; kept for completeness.

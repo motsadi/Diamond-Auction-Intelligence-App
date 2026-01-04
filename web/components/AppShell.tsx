@@ -88,8 +88,8 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps) 
         activePath={pathname}
       />
 
-      <div className={collapsed ? 'lg:pl-20' : 'lg:pl-72'}>
-        <header className="sticky top-0 z-10 border-b border-gray-200 bg-white/80 backdrop-blur">
+      <div className={`${collapsed ? 'lg:pl-20' : 'lg:pl-72'} print:pl-0`}>
+        <header className="no-print sticky top-0 z-10 border-b border-gray-200 bg-white/80 backdrop-blur">
           <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
             <div className="flex items-center gap-3">
               <button
@@ -119,7 +119,7 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps) 
           </div>
         </header>
 
-        <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 print-reset">
           {children}
         </main>
       </div>

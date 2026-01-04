@@ -4,14 +4,14 @@ import { useState, Suspense } from 'react';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { AppShell } from '@/components/AppShell';
 import { useSearchParams } from 'next/navigation';
-import { staticDataset, STATIC_DATASET_ID } from '@/lib/staticDataset';
+import { staticDataset, usDiamondsDataset, STATIC_DATASET_ID } from '@/lib/staticDataset';
 import toast from 'react-hot-toast';
 
 function AnalysisContentInner() {
   const searchParams = useSearchParams();
   const preselectedDataset = searchParams.get('dataset');
 
-  const datasets = [staticDataset];
+  const datasets = [staticDataset, usDiamondsDataset];
   const [selectedDataset, setSelectedDataset] = useState(preselectedDataset || STATIC_DATASET_ID);
   const [analysisData, setAnalysisData] = useState<any>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);

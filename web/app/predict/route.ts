@@ -1,6 +1,15 @@
 import { NextResponse } from 'next/server';
-import { loadTrainedSyntheticAuction, predictPrice, predictSaleProba, recommendedReserve, priceMetrics, accuracy } from '@/lib/server/syntheticAuction';
-import { STATIC_DATASET_ID } from '@/lib/staticDataset';
+import {
+  loadTrainedSyntheticAuction,
+  predictPrice,
+  predictSaleProba,
+  recommendedReserve,
+  priceMetrics,
+  accuracy,
+} from '@/lib/server/syntheticAuction';
+import { US_DIAMONDS_DATASET_ID } from '@/lib/staticDataset';
+import { loadTrainedUSDiamonds, predictUSDiamonds } from '@/lib/server/usDiamonds';
+import { parseUSDiamondsModelName } from '@/lib/server/datasetRegistry';
 
 export const runtime = 'nodejs';
 
@@ -11,17 +20,103 @@ export async function POST(req: Request) {
     if (!datasetId) {
       return NextResponse.json({ success: false, message: 'datasetId is required' }, { status: 400 });
     }
-    if (datasetId !== STATIC_DATASET_ID) {
-      return NextResponse.json(
-        {
-          success: false,
-          message:
-            'Only the built-in synthetic dataset is available in this deployment. Set NEXT_PUBLIC_API_URL to use an external API for uploaded datasets.',
+
+    // US diamonds batch prediction (price only)
+    if (datasetId === US_DIAMONDS_DATASET_ID) {
+      const trained = await loadTrainedUSDiamonds();
+      const model = parseUSDiamondsModelName(body?.modelName);
+      const preds = trained.rows.map((r) => {
+        const out = predictUSDiamonds(trained, model, {
+          carat: r.carat,
+          cut: r.cut,
+          color: r.color,
+          clarity: r.clarity,
+          depth: r.depth,
+          table: r.table,
+          x: r.x,
+          y: r.y,
+          z: r.z,
+        });
+        const predicted_price_per_carat = out.predicted_price / Math.max(r.carat, 1e-6);
+        return {
+          carat: r.carat,
+          cut: r.cut,
+          color: r.color,
+          clarity: r.clarity,
+          depth: r.depth,
+          table: r.table,
+          x: r.x,
+          y: r.y,
+          z: r.z,
+          actual_price: r.price,
+          predicted_price: out.predicted_price,
+          predicted_price_per_carat,
+          price_low: out.price_low,
+          price_high: out.price_high,
+        };
+      });
+
+      const yTrue = trained.rows.map((r) => r.price);
+      const yPred = preds.map((p) => p.predicted_price);
+      const metricsPrice = priceMetrics(yTrue, yPred);
+
+      const previewRows = preds.slice(0, 10);
+
+      // Keep CSV output bounded (avoid oversized serverless responses)
+      const maxCsvRows = 5000;
+      const csvHeader = [
+        'carat',
+        'cut',
+        'color',
+        'clarity',
+        'depth',
+        'table',
+        'x',
+        'y',
+        'z',
+        'predicted_price',
+        'predicted_price_per_carat',
+        'price_low',
+        'price_high',
+        'actual_price',
+      ];
+      const csvLines = [csvHeader.join(',')];
+      for (const p of preds.slice(0, maxCsvRows)) {
+        csvLines.push(
+          [
+            p.carat,
+            p.cut,
+            p.color,
+            p.clarity,
+            p.depth,
+            p.table,
+            p.x,
+            p.y,
+            p.z,
+            p.predicted_price,
+            p.predicted_price_per_carat,
+            p.price_low,
+            p.price_high,
+            p.actual_price,
+          ].join(',')
+        );
+      }
+      const outputCsvData = Buffer.from(csvLines.join('\n'), 'utf8').toString('base64');
+
+      return NextResponse.json({
+        success: true,
+        predictionId: `us-diamonds-${Date.now()}`,
+        metrics: {
+          price_r2: metricsPrice.r2,
+          price_mae: metricsPrice.mae,
+          sale_accuracy: undefined,
         },
-        { status: 400 }
-      );
+        previewRows,
+        outputCsvData,
+      });
     }
 
+    // Default: synthetic auction dataset
     const trained = await loadTrainedSyntheticAuction();
 
     const yTrue = trained.rows.map((r) => r.final_price);

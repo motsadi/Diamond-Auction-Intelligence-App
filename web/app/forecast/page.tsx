@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, Suspense } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { AppShell } from '@/components/AppShell';
 import { apiClient, OptimizeRequest, SurfaceRequest, ShapRequest } from '@/lib/api';
 import toast from 'react-hot-toast';
 import { useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import { staticDataset, STATIC_DATASET_ID } from '@/lib/staticDataset';
+import { staticDataset, usDiamondsDataset, STATIC_DATASET_ID, US_DIAMONDS_DATASET_ID } from '@/lib/staticDataset';
 import type { PlotParams } from 'react-plotly.js';
 
 const Plot = dynamic<PlotParams>(
@@ -19,13 +19,15 @@ function ForecastContentInner() {
   const searchParams = useSearchParams();
   const preselectedDataset = searchParams.get('dataset');
 
-  const datasets = [staticDataset];
+  const datasets = [staticDataset, usDiamondsDataset];
   const [selectedDataset, setSelectedDataset] = useState(preselectedDataset || STATIC_DATASET_ID);
   const [modelName, setModelName] = useState('Gradient Boosting');
   const [horizon, setHorizon] = useState(1);
   const [isRunning, setIsRunning] = useState(false);
   const [predictionResult, setPredictionResult] = useState<any>(null);
-  const modelOptions = ['Gradient Boosting', 'Random Forest', 'Extra Trees'];
+  const auctionModelOptions = ['Gradient Boosting', 'Random Forest', 'Extra Trees'];
+  const diamondsModelOptions = ['Ridge Regression', 'Random Forest'];
+  const modelOptions = selectedDataset === US_DIAMONDS_DATASET_ID ? diamondsModelOptions : auctionModelOptions;
 
   // Single-lot prediction state
   const [singleCarat, setSingleCarat] = useState(1.0);
@@ -33,16 +35,25 @@ function ForecastContentInner() {
   const [singleClarity, setSingleClarity] = useState('VS1');
   const [singleViewings, setSingleViewings] = useState(10);
   const [singlePriceIndex, setSinglePriceIndex] = useState(1.0);
+  // US diamonds single prediction extra fields
+  const [singleCut, setSingleCut] = useState('Ideal');
+  const [singleDepth, setSingleDepth] = useState(61.5);
+  const [singleTable, setSingleTable] = useState(55);
+  const [singleX, setSingleX] = useState(3.95);
+  const [singleY, setSingleY] = useState(3.98);
+  const [singleZ, setSingleZ] = useState(2.43);
   const [singlePrediction, setSinglePrediction] = useState<any>(null);
   const [isPredictingSingle, setIsPredictingSingle] = useState(false);
 
   // Valid options from dataset (for static dataset)
   const colorOptions = ['D', 'E', 'F', 'G', 'H', 'I', 'J'];
   const clarityOptions = ['IF', 'VVS1', 'VVS2', 'VS1', 'VS2', 'SI1', 'SI2', 'I1'];
+  const cutOptions = ['Fair', 'Good', 'Very Good', 'Premium', 'Ideal'];
 
   // Optimization state
   const [fixedColorOpt, setFixedColorOpt] = useState('G');
   const [fixedClarityOpt, setFixedClarityOpt] = useState('VS1');
+  const [fixedCutOpt, setFixedCutOpt] = useState('Ideal');
   const [optObjective, setOptObjective] = useState<'max_price' | 'max_prob' | 'target'>('max_price');
   const [minProb, setMinProb] = useState(0.5);
   const [nSamples, setNSamples] = useState(1000);
@@ -58,11 +69,29 @@ function ForecastContentInner() {
   const [surfaceResolution, setSurfaceResolution] = useState(25);
   const [surfaceData, setSurfaceData] = useState<any>(null);
   const [isComputingSurface, setIsComputingSurface] = useState(false);
-  const continuousVars = ['carat', 'viewings', 'price_index'];
+  const continuousVars =
+    selectedDataset === US_DIAMONDS_DATASET_ID
+      ? ['carat', 'depth', 'table', 'x', 'y', 'z']
+      : ['carat', 'viewings', 'price_index'];
 
   // SHAP state
   const [shapData, setShapData] = useState<any>(null);
   const [isComputingShap, setIsComputingShap] = useState(false);
+
+  // Keep defaults sane when switching datasets
+  useEffect(() => {
+    if (selectedDataset === US_DIAMONDS_DATASET_ID) {
+      if (!/ridge|random\s*forest/i.test(modelName)) setModelName('Ridge Regression');
+      if (!continuousVars.includes(surfaceVarX)) setSurfaceVarX('carat');
+      if (!continuousVars.includes(surfaceVarY) || surfaceVarY === surfaceVarX) setSurfaceVarY('depth');
+      if (surfaceMetric !== 'Final Price') setSurfaceMetric('Final Price');
+    } else {
+      if (/ridge/i.test(modelName)) setModelName('Gradient Boosting');
+      if (!continuousVars.includes(surfaceVarX)) setSurfaceVarX('carat');
+      if (!continuousVars.includes(surfaceVarY) || surfaceVarY === surfaceVarX) setSurfaceVarY('viewings');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDataset]);
 
   const handleRunForecast = async () => {
     if (!selectedDataset) {
@@ -94,15 +123,32 @@ function ForecastContentInner() {
 
     setIsPredictingSingle(true);
     try {
-      const result = await apiClient.predictSingle({
-        datasetId: selectedDataset,
-        modelName,
-        carat: singleCarat,
-        color: singleColor,
-        clarity: singleClarity,
-        viewings: singleViewings,
-        price_index: singlePriceIndex,
-      });
+      const result =
+        selectedDataset === US_DIAMONDS_DATASET_ID
+          ? await apiClient.predictSingle({
+              // US diamonds
+              datasetId: selectedDataset,
+              modelName,
+              carat: singleCarat,
+              cut: singleCut,
+              color: singleColor,
+              clarity: singleClarity,
+              depth: singleDepth,
+              table: singleTable,
+              x: singleX,
+              y: singleY,
+              z: singleZ,
+            } as any)
+          : await apiClient.predictSingle({
+              // Synthetic auction
+              datasetId: selectedDataset,
+              modelName,
+              carat: singleCarat,
+              color: singleColor,
+              clarity: singleClarity,
+              viewings: singleViewings,
+              price_index: singlePriceIndex,
+            });
       setSinglePrediction(result);
       toast.success('Prediction completed!');
     } catch (error: any) {
@@ -128,12 +174,14 @@ function ForecastContentInner() {
         fixed_color: fixedColorOpt,
         fixed_clarity: fixedClarityOpt,
       };
+      // US diamonds supports an additional fixed_cut field
+      (request as any).fixed_cut = fixedCutOpt;
 
       if (optObjective === 'max_price') {
-        request.min_prob = minProb;
+        if (selectedDataset !== US_DIAMONDS_DATASET_ID) request.min_prob = minProb;
       } else if (optObjective === 'target') {
         request.target_price = targetPrice;
-        request.target_prob = targetProb;
+        if (selectedDataset !== US_DIAMONDS_DATASET_ID) request.target_prob = targetProb;
       }
 
       const result = await apiClient.optimize(request);
@@ -170,6 +218,7 @@ function ForecastContentInner() {
         fixed_color: fixedColorOpt,
         fixed_clarity: fixedClarityOpt,
       };
+      (request as any).fixed_cut = fixedCutOpt;
 
       const result = await apiClient.surface(request);
       if (result.success) {
@@ -256,34 +305,44 @@ function ForecastContentInner() {
               </select>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Horizon (optional)
-              </label>
-              <input
-                type="number"
-                value={horizon}
-                onChange={(e) => setHorizon(parseInt(e.target.value) || 1)}
-                min="1"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
-            </div>
+            {selectedDataset === US_DIAMONDS_DATASET_ID ? null : (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Horizon (optional)
+                </label>
+                <input
+                  type="number"
+                  value={horizon}
+                  onChange={(e) => setHorizon(parseInt(e.target.value) || 1)}
+                  min="1"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+            )}
 
             <button
               onClick={handleRunForecast}
               disabled={isRunning || !selectedDataset}
               className="w-full bg-indigo-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-indigo-700 disabled:opacity-50"
             >
-              {isRunning ? 'Running Forecast...' : 'Run Forecast'}
+              {isRunning
+                ? 'Running...'
+                : selectedDataset === US_DIAMONDS_DATASET_ID
+                ? 'Run Price Prediction'
+                : 'Run Forecast'}
             </button>
           </div>
         </div>
 
         {/* Single-lot prediction section */}
         <div className="bg-white p-6 rounded-lg shadow-md mb-6">
-          <h2 className="text-2xl font-semibold mb-4">Predict and Recommend</h2>
+          <h2 className="text-2xl font-semibold mb-4">
+            {selectedDataset === US_DIAMONDS_DATASET_ID ? 'Predict Price' : 'Predict and Recommend'}
+          </h2>
           <p className="text-gray-600 mb-4">
-            Enter details about a new diamond lot to get price prediction, sale probability, and recommended reserve price.
+            {selectedDataset === US_DIAMONDS_DATASET_ID
+              ? 'Enter diamond attributes to estimate retail price with an 80% uncertainty band.'
+              : 'Enter details about a new diamond lot to get price prediction, sale probability, and recommended reserve price.'}
           </p>
           <div className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -301,6 +360,22 @@ function ForecastContentInner() {
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
+              {selectedDataset === US_DIAMONDS_DATASET_ID ? (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Cut</label>
+                  <select
+                    value={singleCut}
+                    onChange={(e) => setSingleCut(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    {cutOptions.map((cut) => (
+                      <option key={cut} value={cut}>
+                        {cut}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Colour grade
@@ -333,34 +408,91 @@ function ForecastContentInner() {
                   ))}
                 </select>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Number of viewings
-                </label>
-                <input
-                  type="number"
-                  value={singleViewings}
-                  onChange={(e) => setSingleViewings(parseInt(e.target.value) || 0)}
-                  min="0"
-                  max="50"
-                  step="1"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Price index
-                </label>
-                <input
-                  type="number"
-                  value={singlePriceIndex}
-                  onChange={(e) => setSinglePriceIndex(parseFloat(e.target.value) || 0)}
-                  min="0.5"
-                  max="2.0"
-                  step="0.01"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
+              {selectedDataset === US_DIAMONDS_DATASET_ID ? (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Depth</label>
+                    <input
+                      type="number"
+                      value={singleDepth}
+                      onChange={(e) => setSingleDepth(parseFloat(e.target.value) || 0)}
+                      step="0.1"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Table</label>
+                    <input
+                      type="number"
+                      value={singleTable}
+                      onChange={(e) => setSingleTable(parseFloat(e.target.value) || 0)}
+                      step="0.1"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">x</label>
+                    <input
+                      type="number"
+                      value={singleX}
+                      onChange={(e) => setSingleX(parseFloat(e.target.value) || 0)}
+                      step="0.01"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">y</label>
+                    <input
+                      type="number"
+                      value={singleY}
+                      onChange={(e) => setSingleY(parseFloat(e.target.value) || 0)}
+                      step="0.01"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">z</label>
+                    <input
+                      type="number"
+                      value={singleZ}
+                      onChange={(e) => setSingleZ(parseFloat(e.target.value) || 0)}
+                      step="0.01"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Number of viewings
+                    </label>
+                    <input
+                      type="number"
+                      value={singleViewings}
+                      onChange={(e) => setSingleViewings(parseInt(e.target.value) || 0)}
+                      min="0"
+                      max="50"
+                      step="1"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Price index
+                    </label>
+                    <input
+                      type="number"
+                      value={singlePriceIndex}
+                      onChange={(e) => setSinglePriceIndex(parseFloat(e.target.value) || 0)}
+                      min="0.5"
+                      max="2.0"
+                      step="0.01"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                </>
+              )}
             </div>
             <button
               onClick={handleSinglePredict}
@@ -374,20 +506,37 @@ function ForecastContentInner() {
           {singlePrediction && (
             <div className="mt-6 p-4 bg-blue-50 rounded-md">
               <h3 className="text-lg font-semibold mb-3">Prediction Results</h3>
-              <div className="space-y-2">
-                <p className="text-gray-700">
-                  <span className="font-semibold">Predicted final price:</span>{' '}
-                  ${singlePrediction.pred_price.toFixed(2)}
-                </p>
-                <p className="text-gray-700">
-                  <span className="font-semibold">Predicted sale probability:</span>{' '}
-                  {(singlePrediction.pred_sale_proba * 100).toFixed(1)}%
-                </p>
-                <p className="text-gray-700">
-                  <span className="font-semibold">Recommended reserve price:</span>{' '}
-                  ${singlePrediction.recommended_reserve.toFixed(2)}
-                </p>
-              </div>
+              {selectedDataset === US_DIAMONDS_DATASET_ID ? (
+                <div className="space-y-2">
+                  <p className="text-gray-700">
+                    <span className="font-semibold">Predicted price:</span>{' '}
+                    ${Number(singlePrediction.predicted_price ?? singlePrediction.pred_price).toFixed(2)}
+                  </p>
+                  <p className="text-gray-700">
+                    <span className="font-semibold">Predicted price per carat:</span>{' '}
+                    ${Number(singlePrediction.predicted_price_per_carat).toFixed(2)} / ct
+                  </p>
+                  <p className="text-gray-700">
+                    <span className="font-semibold">80% interval:</span>{' '}
+                    ${Number(singlePrediction.price_low).toFixed(0)} – ${Number(singlePrediction.price_high).toFixed(0)}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-gray-700">
+                    <span className="font-semibold">Predicted final price:</span>{' '}
+                    ${singlePrediction.pred_price.toFixed(2)}
+                  </p>
+                  <p className="text-gray-700">
+                    <span className="font-semibold">Predicted sale probability:</span>{' '}
+                    {(singlePrediction.pred_sale_proba * 100).toFixed(1)}%
+                  </p>
+                  <p className="text-gray-700">
+                    <span className="font-semibold">Recommended reserve price:</span>{' '}
+                    ${singlePrediction.recommended_reserve.toFixed(2)}
+                  </p>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -511,13 +660,31 @@ function ForecastContentInner() {
         <div className="bg-white p-6 rounded-lg shadow-md mb-6">
           <h2 className="text-2xl font-semibold mb-4">Optimisation & Solution Surfaces</h2>
           <p className="text-gray-600 mb-6">
-            Work backwards from a desired outcome or explore how two features influence price, sale probability or expected revenue.
+            {selectedDataset === US_DIAMONDS_DATASET_ID
+              ? 'Explore how features influence predicted price and search for high-value configurations.'
+              : 'Work backwards from a desired outcome or explore how two features influence price, sale probability or expected revenue.'}
           </p>
 
           {/* Fixed Categorical Settings */}
           <div className="mb-6">
             <h3 className="text-lg font-semibold mb-4">Fixed Categorical Settings</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {selectedDataset === US_DIAMONDS_DATASET_ID ? (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Select cut</label>
+                  <select
+                    value={fixedCutOpt}
+                    onChange={(e) => setFixedCutOpt(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    {cutOptions.map((cut) => (
+                      <option key={cut} value={cut}>
+                        {cut}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Select colour grade
@@ -566,13 +733,23 @@ function ForecastContentInner() {
                   onChange={(e) => setOptObjective(e.target.value as 'max_price' | 'max_prob' | 'target')}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
-                  <option value="max_price">Maximise Final Price</option>
-                  <option value="max_prob">Maximise Sale Probability</option>
-                  <option value="target">Match Target Price & Sale Probability</option>
+                  {selectedDataset === US_DIAMONDS_DATASET_ID ? (
+                    <>
+                      <option value="max_price">Maximise Price (USD)</option>
+                      <option value="max_prob">Maximise Price per Carat (USD/ct)</option>
+                      <option value="target">Target Price (USD)</option>
+                    </>
+                  ) : (
+                    <>
+                      <option value="max_price">Maximise Final Price</option>
+                      <option value="max_prob">Maximise Sale Probability</option>
+                      <option value="target">Match Target Price & Sale Probability</option>
+                    </>
+                  )}
                 </select>
               </div>
 
-              {optObjective === 'max_price' && (
+              {optObjective === 'max_price' && selectedDataset !== US_DIAMONDS_DATASET_ID && (
                 <>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -605,6 +782,21 @@ function ForecastContentInner() {
                 </>
               )}
 
+              {optObjective === 'max_price' && selectedDataset === US_DIAMONDS_DATASET_ID && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Number of random samples</label>
+                  <input
+                    type="number"
+                    min="100"
+                    max="5000"
+                    step="100"
+                    value={nSamples}
+                    onChange={(e) => setNSamples(parseInt(e.target.value) || 1000)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+              )}
+
               {optObjective === 'max_prob' && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -626,7 +818,7 @@ function ForecastContentInner() {
                 <>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Target final price
+                      {selectedDataset === US_DIAMONDS_DATASET_ID ? 'Target price (USD)' : 'Target final price'}
                     </label>
                     <input
                       type="number"
@@ -637,20 +829,22 @@ function ForecastContentInner() {
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     />
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Target sale probability: {targetProb.toFixed(2)}
-                    </label>
-                    <input
-                      type="range"
-                      min="0"
-                      max="1"
-                      step="0.05"
-                      value={targetProb}
-                      onChange={(e) => setTargetProb(parseFloat(e.target.value))}
-                      className="w-full"
-                    />
-                  </div>
+                  {selectedDataset === US_DIAMONDS_DATASET_ID ? null : (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Target sale probability: {targetProb.toFixed(2)}
+                      </label>
+                      <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.05"
+                        value={targetProb}
+                        onChange={(e) => setTargetProb(parseFloat(e.target.value))}
+                        className="w-full"
+                      />
+                    </div>
+                  )}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Number of random samples
@@ -767,8 +961,12 @@ function ForecastContentInner() {
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
                   <option value="Final Price">Final Price</option>
-                  <option value="Sale Probability">Sale Probability</option>
-                  <option value="Expected Revenue">Expected Revenue</option>
+                  {selectedDataset === US_DIAMONDS_DATASET_ID ? null : (
+                    <>
+                      <option value="Sale Probability">Sale Probability</option>
+                      <option value="Expected Revenue">Expected Revenue</option>
+                    </>
+                  )}
                 </select>
               </div>
               <div>
@@ -866,29 +1064,33 @@ function ForecastContentInner() {
               </div>
 
               {/* Sale Model Feature Importance */}
-              <div>
-                <h3 className="text-lg font-semibold mb-4">Sale Probability Model Feature Importance</h3>
-                <div className="space-y-3">
-                  {Object.entries(shapData.sale_importance)
-                    .sort(([, a], [, b]) => (b as number) - (a as number))
-                    .map(([feature, importance]) => (
-                      <div key={feature}>
-                        <div className="flex justify-between mb-1">
-                          <span className="text-sm font-medium text-gray-700">{feature}</span>
-                          <span className="text-sm text-gray-600">{(importance as number).toFixed(4)}</span>
+              {selectedDataset === US_DIAMONDS_DATASET_ID ||
+              !shapData.sale_importance ||
+              Object.keys(shapData.sale_importance).length === 0 ? null : (
+                <div>
+                  <h3 className="text-lg font-semibold mb-4">Sale Probability Model Feature Importance</h3>
+                  <div className="space-y-3">
+                    {Object.entries(shapData.sale_importance)
+                      .sort(([, a], [, b]) => (b as number) - (a as number))
+                      .map(([feature, importance]) => (
+                        <div key={feature}>
+                          <div className="flex justify-between mb-1">
+                            <span className="text-sm font-medium text-gray-700">{feature}</span>
+                            <span className="text-sm text-gray-600">{(importance as number).toFixed(4)}</span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-2">
+                            <div
+                              className="bg-green-600 h-2 rounded-full"
+                              style={{
+                                width: `${((importance as number) / Math.max(...Object.values(shapData.sale_importance) as number[]) * 100)}%`,
+                              }}
+                            />
+                          </div>
                         </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2">
-                          <div
-                            className="bg-green-600 h-2 rounded-full"
-                            style={{
-                              width: `${((importance as number) / Math.max(...Object.values(shapData.sale_importance) as number[]) * 100)}%`,
-                            }}
-                          />
-                        </div>
-                      </div>
-                    ))}
+                      ))}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           )}
         </div>

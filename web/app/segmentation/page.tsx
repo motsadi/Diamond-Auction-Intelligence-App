@@ -9,8 +9,8 @@ function SegmentationContent() {
       <div className="card p-6">
         <h1 className="text-2xl font-bold text-gray-900">Buyer Segmentation & Recommendation Systems</h1>
         <p className="mt-2 text-gray-700">
-          This module will help Okavango Diamond Company understand buyer segments, recommend lots, and improve auction
-          design and matching between supply and demand.
+          This module will help auction teams understand buyer segments, recommend lots, and improve auction design and
+          matching between supply and demand.
         </p>
         <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
           {[

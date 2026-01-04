@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { loadTrainedSyntheticAuction, predictPrice, predictSaleProba, recommendedReserve } from '@/lib/server/syntheticAuction';
-import { STATIC_DATASET_ID } from '@/lib/staticDataset';
+import { US_DIAMONDS_DATASET_ID } from '@/lib/staticDataset';
+import { loadTrainedUSDiamonds, predictUSDiamonds } from '@/lib/server/usDiamonds';
+import { parseUSDiamondsModelName } from '@/lib/server/datasetRegistry';
 
 export const runtime = 'nodejs';
 
@@ -11,15 +13,50 @@ export async function POST(req: Request) {
     if (!datasetId) {
       return NextResponse.json({ success: false, message: 'datasetId is required' }, { status: 400 });
     }
-    if (datasetId !== STATIC_DATASET_ID) {
-      return NextResponse.json(
-        {
-          success: false,
-          message:
-            'Only the built-in synthetic dataset is available in this deployment. Set NEXT_PUBLIC_API_URL to use an external API for uploaded datasets.',
-        },
-        { status: 400 }
-      );
+
+    // US diamonds single prediction
+    if (datasetId === US_DIAMONDS_DATASET_ID) {
+      const trained = await loadTrainedUSDiamonds();
+      const model = parseUSDiamondsModelName(body?.modelName);
+
+      const carat = Number(body?.carat);
+      const cut = String(body?.cut ?? '');
+      const color = String(body?.color ?? '');
+      const clarity = String(body?.clarity ?? '');
+      const depth = Number(body?.depth);
+      const table = Number(body?.table);
+      const x = Number(body?.x);
+      const y = Number(body?.y);
+      const z = Number(body?.z);
+
+      if (
+        !Number.isFinite(carat) ||
+        !Number.isFinite(depth) ||
+        !Number.isFinite(table) ||
+        !Number.isFinite(x) ||
+        !Number.isFinite(y) ||
+        !Number.isFinite(z) ||
+        !cut ||
+        !color ||
+        !clarity
+      ) {
+        return NextResponse.json({ success: false, message: 'Invalid inputs' }, { status: 400 });
+      }
+
+      const out = predictUSDiamonds(trained, model, { carat, cut, color, clarity, depth, table, x, y, z });
+      const predicted_price_per_carat = out.predicted_price / Math.max(carat, 1e-6);
+
+      // Keep legacy field names for UI compatibility where possible
+      return NextResponse.json({
+        success: true,
+        pred_price: out.predicted_price,
+        pred_sale_proba: undefined,
+        recommended_reserve: undefined,
+        predicted_price: out.predicted_price,
+        predicted_price_per_carat,
+        price_low: out.price_low,
+        price_high: out.price_high,
+      });
     }
 
     const carat = Number(body?.carat);

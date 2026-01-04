@@ -39,7 +39,7 @@ function DashboardContent() {
     <AppShell title="Overview" subtitle="Operational snapshot and quick links">
       <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <div className="text-sm text-gray-600">Okavango Diamond Company</div>
+          <div className="text-sm text-gray-600">Auction operations</div>
           <h1 className="text-2xl font-bold text-gray-900">Today’s overview</h1>
         </div>
         <div className="flex gap-2">

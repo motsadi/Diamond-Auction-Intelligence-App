@@ -4,13 +4,18 @@ import { useParams } from 'next/navigation';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { AppShell } from '@/components/AppShell';
 import Link from 'next/link';
-import { staticDataset, STATIC_DATASET_ID } from '@/lib/staticDataset';
+import { staticDataset, usDiamondsDataset, STATIC_DATASET_ID, US_DIAMONDS_DATASET_ID } from '@/lib/staticDataset';
 
 function DatasetDetailContent() {
   const params = useParams();
   const datasetId = Array.isArray(params.id) ? params.id[0] : params.id;
 
-  const dataset = datasetId === STATIC_DATASET_ID ? staticDataset : null;
+  const dataset =
+    datasetId === STATIC_DATASET_ID
+      ? staticDataset
+      : datasetId === US_DIAMONDS_DATASET_ID
+      ? usDiamondsDataset
+      : null;
 
   if (!dataset) {
     return (
@@ -76,7 +81,7 @@ function DatasetDetailContent() {
       ) : null}
 
       <div className="flex gap-2">
-        <Link href="/api/static-dataset" className="btn-secondary">
+        <Link href={dataset.downloadPath || '/api/static-dataset'} className="btn-secondary">
           Download CSV
         </Link>
         <Link href="/analysis" className="btn-secondary">

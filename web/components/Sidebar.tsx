@@ -81,7 +81,7 @@ function SidebarInner({
           {collapsed ? null : (
             <div className="leading-tight">
               <div className="text-sm font-semibold text-gray-900">DAI</div>
-              <div className="text-xs text-gray-500">Okavango Diamond Co.</div>
+              <div className="text-xs text-gray-500">Diamond auction intelligence</div>
             </div>
           )}
         </Link>
@@ -133,7 +133,7 @@ export function Sidebar(props: SidebarProps) {
   return (
     <>
       {/* Desktop */}
-      <div className={`fixed inset-y-0 left-0 z-30 hidden ${widthClass} lg:block`}>
+      <div className={`no-print fixed inset-y-0 left-0 z-30 hidden ${widthClass} lg:block`}>
         <SidebarInner
           items={props.items}
           activePath={props.activePath}
@@ -145,7 +145,7 @@ export function Sidebar(props: SidebarProps) {
 
       {/* Mobile overlay + drawer */}
       {props.mobileOpen ? (
-        <div className="fixed inset-0 z-40 lg:hidden">
+        <div className="no-print fixed inset-0 z-40 lg:hidden">
           <button
             type="button"
             className="absolute inset-0 bg-black/30"

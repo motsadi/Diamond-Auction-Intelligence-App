@@ -44,3 +44,20 @@
     @apply block text-sm font-medium text-gray-700;
   }
 }
+
+/* Print / PDF export helpers */
+@media print {
+  body {
+    background: #fff !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .print-reset {
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: none !important;
+  }
+}

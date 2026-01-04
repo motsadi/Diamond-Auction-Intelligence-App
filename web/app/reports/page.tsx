@@ -1,10 +1,10 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { AppShell } from '@/components/AppShell';
 import toast from 'react-hot-toast';
-import { staticDataset, STATIC_DATASET_ID } from '@/lib/staticDataset';
+import { staticDataset, usDiamondsDataset, STATIC_DATASET_ID, US_DIAMONDS_DATASET_ID } from '@/lib/staticDataset';
 import {
   ResponsiveContainer,
   BarChart,
@@ -45,8 +45,9 @@ function toTopNImportance(obj: Record<string, number> | undefined, n = 10) {
 }
 
 function ReportsContent() {
-  const datasets = [staticDataset];
+  const datasets = [staticDataset, usDiamondsDataset];
   const [selectedDataset, setSelectedDataset] = useState(STATIC_DATASET_ID);
+  const [modelName, setModelName] = useState('Gradient Boosting');
   const [isGenerating, setIsGenerating] = useState(false);
   const [report, setReport] = useState<ReportData | null>(null);
 
@@ -61,6 +62,18 @@ function ReportsContent() {
     [report?.shap]
   );
 
+  const modelOptions =
+    selectedDataset === US_DIAMONDS_DATASET_ID ? ['Ridge Regression', 'Random Forest'] : ['Gradient Boosting'];
+
+  useEffect(() => {
+    if (selectedDataset === US_DIAMONDS_DATASET_ID) {
+      if (!/ridge|random\s*forest/i.test(modelName)) setModelName('Ridge Regression');
+    } else {
+      if (/ridge|random\s*forest/i.test(modelName)) setModelName('Gradient Boosting');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDataset]);
+
   const handleGenerate = async () => {
     setIsGenerating(true);
     setReport(null);
@@ -74,12 +87,12 @@ function ReportsContent() {
         fetch('/predict', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ datasetId: selectedDataset, modelName: 'Gradient Boosting', horizon: 1 }),
+          body: JSON.stringify({ datasetId: selectedDataset, modelName, horizon: 1 }),
         }),
         fetch('/shap', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ datasetId: selectedDataset, modelName: 'Gradient Boosting' }),
+          body: JSON.stringify({ datasetId: selectedDataset, modelName }),
         }),
       ]);
 
@@ -186,13 +199,22 @@ function ReportsContent() {
     );
   };
 
+  const handlePrint = () => {
+    if (!report) return;
+    // Use browser “Save to PDF” for the most reliable export on Vercel.
+    window.print();
+  };
+
   return (
     <AppShell
       title="Reports"
-      subtitle="Generate daily operational reports for Okavango Diamond Company"
+      subtitle="Generate print-ready operational reports"
       actions={
         report ? (
           <div className="flex items-center gap-2">
+            <button className="btn-secondary" onClick={handlePrint}>
+              Print / Save PDF
+            </button>
             <button className="btn-secondary" onClick={handleDownloadJson}>
               Download JSON
             </button>
@@ -222,6 +244,16 @@ function ReportsContent() {
                 {datasets.map((ds: any) => (
                   <option key={ds.id} value={ds.id}>
                     {ds.name} ({ds.rowCount} rows)
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="label mb-1">Model</label>
+              <select value={modelName} onChange={(e) => setModelName(e.target.value)} className="input">
+                {modelOptions.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
                   </option>
                 ))}
               </select>
@@ -273,21 +305,30 @@ function ReportsContent() {
               </div>
             </div>
 
-            <div className="card p-6">
-              <h2 className="text-lg font-semibold text-gray-900">Top sale-probability drivers</h2>
-              <p className="mt-1 text-sm text-gray-600">Normalized feature importance (demo).</p>
-              <div className="mt-4 h-80">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={saleImportance} layout="vertical" margin={{ left: 16, right: 16 }}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis type="number" domain={[0, 'dataMax']} />
-                    <YAxis type="category" dataKey="feature" width={140} />
-                    <Tooltip />
-                    <Bar dataKey="importance" fill="#10b981" radius={[6, 6, 6, 6]} />
-                  </BarChart>
-                </ResponsiveContainer>
+            {saleImportance.length === 0 ? (
+              <div className="card p-6">
+                <h2 className="text-lg font-semibold text-gray-900">Secondary drivers</h2>
+                <p className="mt-1 text-sm text-gray-600">
+                  This dataset does not include a sale-probability model. Use the price drivers on the left.
+                </p>
               </div>
-            </div>
+            ) : (
+              <div className="card p-6">
+                <h2 className="text-lg font-semibold text-gray-900">Top sale-probability drivers</h2>
+                <p className="mt-1 text-sm text-gray-600">Normalized feature importance (demo).</p>
+                <div className="mt-4 h-80">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={saleImportance} layout="vertical" margin={{ left: 16, right: 16 }}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis type="number" domain={[0, 'dataMax']} />
+                      <YAxis type="category" dataKey="feature" width={140} />
+                      <Tooltip />
+                      <Bar dataKey="importance" fill="#10b981" radius={[6, 6, 6, 6]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="card p-6">
