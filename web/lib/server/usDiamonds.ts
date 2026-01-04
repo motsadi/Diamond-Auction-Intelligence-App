@@ -311,7 +311,8 @@ export async function loadTrainedUSDiamonds(): Promise<USDiamondsTrained> {
   }
 
   // Train on a representative subset for serverless performance.
-  const trainRows = sampleRows(rows, 15000);
+  // Important: Vercel serverless cold-start needs this to be fast (<10–20s).
+  const trainRows = sampleRows(rows, 5000);
   const enc = buildEncoder(trainRows);
 
   const X = trainRows.map((r) =>
@@ -341,13 +342,13 @@ export async function loadTrainedUSDiamonds(): Promise<USDiamondsTrained> {
 
   // Random Forest
   const rf = new RandomForestRegression({
-    nEstimators: 40,
-    maxFeatures: 0.7,
+    nEstimators: 20,
+    maxFeatures: 0.6,
     replacement: true,
     seed: 42,
     treeOptions: {
-      maxDepth: 12,
-      minNumSamples: 10,
+      maxDepth: 10,
+      minNumSamples: 20,
     },
   });
   rf.train(X, y);
@@ -362,7 +363,10 @@ export async function loadTrainedUSDiamonds(): Promise<USDiamondsTrained> {
     ranges[col] = { min: Math.min(...arr), max: Math.max(...arr) };
   }
 
-  cached = { rows, encoder: enc, ridge, rf: rfModel, ranges };
+  // Keep a bounded set of rows for batch prediction previews/metrics to avoid slow API calls.
+  const rowsForOps = sampleRows(rows, 20000);
+
+  cached = { rows: rowsForOps, encoder: enc, ridge, rf: rfModel, ranges };
   return cached;
 }
 
@@ -402,41 +406,9 @@ export async function getUSDiamondsImportance(trained: USDiamondsTrained, model:
     return out;
   }
 
-  if (!trained.rf.importance) {
-    const trainRows = sampleRows(trained.rows, 15000);
-    const X = trainRows.map((r) =>
-      encodeRow(
-        {
-          carat: r.carat,
-          cut: r.cut,
-          color: r.color,
-          clarity: r.clarity,
-          depth: r.depth,
-          table: r.table,
-          x: r.x,
-          y: r.y,
-          z: r.z,
-        },
-        trained.encoder
-      )
-    );
-    const y = trainRows.map((r) => r.price);
-    trained.rf.importance = permutationImportanceRF(
-      trained.rf.rf,
-      X,
-      y,
-      trained.encoder.featureNames,
-      1500
-    );
-  }
-
-  // Strip helper keys
-  const out: Record<string, number> = {};
-  for (const [k, v] of Object.entries(trained.rf.importance)) {
-    if (k.startsWith('__')) continue;
-    out[k] = v as number;
-  }
-  return out;
+  // Fast proxy for Random Forest importance: use ridge weight magnitudes.
+  // (Permutation importance is expensive and can exceed serverless time budgets.)
+  return await getUSDiamondsImportance(trained, 'Ridge');
 }
 
 
