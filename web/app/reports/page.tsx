@@ -5,6 +5,8 @@ import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { AppShell } from '@/components/AppShell';
 import toast from 'react-hot-toast';
 import { staticDataset, usDiamondsDataset, STATIC_DATASET_ID, US_DIAMONDS_DATASET_ID } from '@/lib/staticDataset';
+import { useAuth } from '@/lib/auth';
+import { logActivity } from '@/lib/activity';
 import {
   ResponsiveContainer,
   BarChart,
@@ -45,6 +47,8 @@ function toTopNImportance(obj: Record<string, number> | undefined, n = 10) {
 }
 
 function ReportsContent() {
+  const { user } = useAuth();
+  const actorId = user?.id ?? '';
   const datasets = [staticDataset, usDiamondsDataset];
   const [selectedDataset, setSelectedDataset] = useState(STATIC_DATASET_ID);
   const [modelName, setModelName] = useState('Gradient Boosting');
@@ -114,6 +118,18 @@ function ReportsContent() {
       };
       setReport(next);
       toast.success('Report generated');
+      void logActivity({
+        actorId,
+        action: 'report.generate',
+        entityType: 'report',
+        entityId: selectedDataset,
+        meta: {
+          datasetId: selectedDataset,
+          datasetName: selectedDs.name,
+          modelName,
+          host: typeof window !== 'undefined' ? window.location.host : undefined,
+        },
+      });
     } catch (e: any) {
       toast.error(e?.message || 'Network error');
     } finally {

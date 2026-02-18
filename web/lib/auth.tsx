@@ -1,7 +1,8 @@
 'use client';
 
-import { createContext, useContext } from 'react';
+import { createContext, useContext, useEffect, useRef } from 'react';
 import { db } from './instant';
+import { logActivity } from '@/lib/activity';
 
 // Allowlist of emails permitted to sign up and sign in.
 const ALLOWED_EMAILS = new Set(
@@ -46,6 +47,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // InstantDB auth hook returns auth state only.
   const { user: authUser, isLoading: authLoading } = db.useAuth();
   const userId = authUser?.id ?? '';
+  const prevUserIdRef = useRef<string>('');
 
   // Fetch the user's profile record (contains role) from the `users` collection.
   // Note: hooks must be called unconditionally; when not signed in we query with an empty id.
@@ -70,11 +72,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
+    const actorId = authUser?.id ?? '';
+    if (actorId) {
+      void logActivity({
+        actorId,
+        action: 'auth.sign_out',
+        entityType: 'auth',
+        entityId: actorId,
+        meta: {
+          email: authUser?.email,
+          host: typeof window !== 'undefined' ? window.location.host : undefined,
+        },
+      });
+    }
     await db.auth.signOut();
     localStorage.removeItem('auth_token');
   };
 
   const isAdmin = user?.role === 'admin';
+
+  useEffect(() => {
+    const nextId = authUser?.id ?? '';
+    const prevId = prevUserIdRef.current;
+    prevUserIdRef.current = nextId;
+    if (!nextId || nextId === prevId) return;
+
+    void logActivity({
+      actorId: nextId,
+      action: 'auth.sign_in',
+      entityType: 'auth',
+      entityId: nextId,
+      meta: {
+        email: authUser?.email,
+        host: typeof window !== 'undefined' ? window.location.host : undefined,
+      },
+    });
+  }, [authUser?.id, authUser?.email]);
 
   return (
     <AuthContext.Provider value={{ user, isLoading, requestCode, verifyCode, signOut, isAdmin }}>

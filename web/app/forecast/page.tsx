@@ -9,6 +9,8 @@ import { useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { staticDataset, usDiamondsDataset, STATIC_DATASET_ID, US_DIAMONDS_DATASET_ID } from '@/lib/staticDataset';
 import type { PlotParams } from 'react-plotly.js';
+import { useAuth } from '@/lib/auth';
+import { logActivity } from '@/lib/activity';
 
 const Plot = dynamic<PlotParams>(
   () => import('react-plotly.js').then((mod) => mod.default),
@@ -18,6 +20,8 @@ const Plot = dynamic<PlotParams>(
 function ForecastContentInner() {
   const searchParams = useSearchParams();
   const preselectedDataset = searchParams.get('dataset');
+  const { user } = useAuth();
+  const actorId = user?.id ?? '';
 
   const datasets = [staticDataset, usDiamondsDataset];
   const [selectedDataset, setSelectedDataset] = useState(preselectedDataset || STATIC_DATASET_ID);
@@ -108,6 +112,18 @@ function ForecastContentInner() {
       });
       setPredictionResult(result);
       toast.success('Forecast completed!');
+      void logActivity({
+        actorId,
+        action: 'forecast.run',
+        entityType: 'forecast',
+        entityId: String(result?.predictionId ?? selectedDataset),
+        meta: {
+          datasetId: selectedDataset,
+          modelName,
+          horizon,
+          host: typeof window !== 'undefined' ? window.location.host : undefined,
+        },
+      });
     } catch (error: any) {
       toast.error(error.message || 'Forecast failed');
     } finally {
@@ -151,6 +167,17 @@ function ForecastContentInner() {
             });
       setSinglePrediction(result);
       toast.success('Prediction completed!');
+      void logActivity({
+        actorId,
+        action: 'predict.single',
+        entityType: 'prediction',
+        entityId: selectedDataset,
+        meta: {
+          datasetId: selectedDataset,
+          modelName,
+          host: typeof window !== 'undefined' ? window.location.host : undefined,
+        },
+      });
     } catch (error: any) {
       toast.error(error.message || 'Prediction failed');
     } finally {
@@ -188,6 +215,18 @@ function ForecastContentInner() {
       if (result.success && result.result) {
         setOptResult(result.result);
         toast.success('Optimization completed!');
+        void logActivity({
+          actorId,
+          action: 'optimize.run',
+          entityType: 'optimization',
+          entityId: selectedDataset,
+          meta: {
+            datasetId: selectedDataset,
+            modelName,
+            objective: optObjective,
+            host: typeof window !== 'undefined' ? window.location.host : undefined,
+          },
+        });
       } else {
         toast.error(result.message || 'Optimization failed - no feasible solution found');
         setOptResult(null);
@@ -224,6 +263,20 @@ function ForecastContentInner() {
       if (result.success) {
         setSurfaceData(result);
         toast.success('Surface computation completed!');
+        void logActivity({
+          actorId,
+          action: 'surface.compute',
+          entityType: 'surface',
+          entityId: selectedDataset,
+          meta: {
+            datasetId: selectedDataset,
+            modelName,
+            varX: surfaceVarX,
+            varY: surfaceVarY,
+            metric: surfaceMetric,
+            host: typeof window !== 'undefined' ? window.location.host : undefined,
+          },
+        });
       } else {
         toast.error('Surface computation failed');
       }
@@ -251,6 +304,17 @@ function ForecastContentInner() {
       if (result.success) {
         setShapData(result);
         toast.success('SHAP analysis completed!');
+        void logActivity({
+          actorId,
+          action: 'shap.compute',
+          entityType: 'explainability',
+          entityId: selectedDataset,
+          meta: {
+            datasetId: selectedDataset,
+            modelName,
+            host: typeof window !== 'undefined' ? window.location.host : undefined,
+          },
+        });
       } else {
         toast.error('SHAP analysis failed');
       }

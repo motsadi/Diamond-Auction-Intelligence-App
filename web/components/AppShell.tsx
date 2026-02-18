@@ -4,6 +4,7 @@ import { ReactNode, useEffect, useMemo, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { Sidebar, type NavItem } from './Sidebar';
 import { useAuth } from '@/lib/auth';
+import { logActivity } from '@/lib/activity';
 
 type AppShellProps = {
   title?: string;
@@ -57,6 +58,25 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps) 
     // close mobile drawer on route change
     setMobileOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    // Best-effort usage tracking (helps distinguish subdomain vs Vercel host).
+    // We only track core pages to avoid log noise.
+    const tracked = new Set(['/dashboard', '/forecast', '/analysis', '/reports', '/datasets', '/history', '/admin']);
+    if (!user?.id) return;
+    if (!tracked.has(pathname)) return;
+    void logActivity({
+      actorId: user.id,
+      action: 'page.view',
+      entityType: 'page',
+      entityId: pathname,
+      meta: {
+        host: typeof window !== 'undefined' ? window.location.host : undefined,
+        path: pathname,
+        isAdmin: Boolean(isAdmin),
+      },
+    });
+  }, [pathname, user?.id, isAdmin]);
 
   const navItems: NavItem[] = useMemo(() => {
     const items: NavItem[] = [
