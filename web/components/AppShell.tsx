@@ -17,9 +17,9 @@ const SIDEBAR_STORAGE_KEY = 'dai.sidebar.collapsed';
 
 function getDefaultTitle(pathname: string) {
   if (pathname === '/dashboard') return 'Overview';
-  if (pathname === '/forecast') return 'Prediction & Demand Forecasting';
-  if (pathname === '/analysis') return 'Data Analysis';
-  if (pathname === '/reports') return 'Reports';
+  if (pathname === '/forecast') return 'Econometric Forecasting';
+  if (pathname === '/analysis') return 'Auction Data Diagnostics';
+  if (pathname === '/reports') return 'Executive Auction Reports';
   if (pathname === '/datasets') return 'Datasets';
   if (pathname === '/history') return 'History';
   if (pathname === '/admin') return 'Admin';
@@ -81,9 +81,9 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps) 
   const navItems: NavItem[] = useMemo(() => {
     const items: NavItem[] = [
       { href: '/dashboard', label: 'Overview', group: 'Core' },
-      { href: '/forecast', label: 'Prediction & Forecasting', group: 'Core', badge: 'Live' },
-      { href: '/analysis', label: 'Analysis', group: 'Core', badge: 'Live' },
-      { href: '/reports', label: 'Reports', group: 'Core', badge: 'New' },
+      { href: '/forecast', label: 'Econometric forecasting', group: 'Core', badge: 'Live' },
+      { href: '/analysis', label: 'Auction diagnostics', group: 'Core', badge: 'Live' },
+      { href: '/reports', label: 'Executive reports', group: 'Core', badge: 'New' },
       { href: '/datasets', label: 'Datasets', group: 'Operations' },
       { href: '/history', label: 'History', group: 'Operations' },
       { href: '/sentiment', label: 'Market sentiment & risk', group: 'ML Modules', badge: 'Soon' },

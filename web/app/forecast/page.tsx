@@ -77,6 +77,37 @@ function ForecastContentInner() {
     selectedDataset === US_DIAMONDS_DATASET_ID
       ? ['carat', 'depth', 'table', 'x', 'y', 'z']
       : ['carat', 'viewings', 'price_index'];
+  const selectedDs = datasets.find((ds: any) => ds.id === selectedDataset);
+  const methodologyCards =
+    selectedDataset === US_DIAMONDS_DATASET_ID
+      ? [
+          {
+            title: 'Hedonic price model',
+            desc: 'Uses diamond attributes to estimate price and uncertainty, similar to a hedonic valuation model.',
+          },
+          {
+            title: 'Quality controls',
+            desc: 'Controls for carat, cut, colour, clarity, depth, table, and dimensions to isolate value drivers.',
+          },
+          {
+            title: 'Uncertainty band',
+            desc: 'Shows a practical prediction interval so teams can judge downside and upside around the point forecast.',
+          },
+        ]
+      : [
+          {
+            title: 'Auction demand signal',
+            desc: 'Combines lot characteristics with viewings and market price index as demand-side econometric proxies.',
+          },
+          {
+            title: 'Two-outcome forecast',
+            desc: 'Models both final price and sale probability so reserve decisions account for revenue and clearance risk.',
+          },
+          {
+            title: 'Policy optimization',
+            desc: 'Searches feasible reserve and lot conditions against objectives such as price, probability, or target revenue.',
+          },
+        ];
 
   // SHAP state
   const [shapData, setShapData] = useState<any>(null);
@@ -330,7 +361,34 @@ function ForecastContentInner() {
       title="Prediction & Demand Forecasting"
       subtitle="Forecasts, optimization, solution surfaces, and explainability"
     >
-        <h1 className="text-2xl font-bold text-gray-900 mb-6">Prediction & Demand Forecasting</h1>
+        <div className="mb-6 overflow-hidden rounded-3xl bg-gradient-to-r from-indigo-950 via-slate-950 to-emerald-950 p-6 text-white shadow-xl">
+          <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+            <div>
+              <div className="text-sm font-medium text-indigo-200">Econometrics-informed auction modeling</div>
+              <h1 className="mt-2 text-3xl font-bold">Prediction & Demand Forecasting</h1>
+              <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-200">
+                Forecast final price, sale probability, reserve guidance, and expected revenue using models that combine
+                diamond attributes with auction demand signals such as viewings and market price index.
+              </p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-white/10 p-4">
+              <div className="text-xs uppercase tracking-wide text-slate-300">Current model setup</div>
+              <div className="mt-2 text-xl font-bold">{modelName}</div>
+              <div className="mt-2 text-sm text-slate-200">{selectedDs?.name} ({selectedDs?.rowCount} rows)</div>
+              <div className="mt-3 text-xs text-slate-300">
+                Decision outputs: price forecast, sale probability, reserve recommendation, scenario surface, SHAP drivers.
+              </div>
+            </div>
+          </div>
+          <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
+            {methodologyCards.map((card) => (
+              <div key={card.title} className="rounded-2xl border border-white/10 bg-white/10 p-4">
+                <div className="font-semibold">{card.title}</div>
+                <p className="mt-2 text-sm text-slate-200">{card.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
 
         <div className="bg-white p-6 rounded-lg shadow-md mb-6">
           <div className="space-y-4">
@@ -608,6 +666,11 @@ function ForecastContentInner() {
         {/* Batch predictions section */}
         <div className="bg-white p-6 rounded-lg shadow-md mb-6">
           <h2 className="text-2xl font-semibold mb-4">Batch Predictions</h2>
+          <p className="text-sm leading-6 text-gray-600">
+            Run the selected model across the dataset to create an auction-lot forecast table. For auction data, the batch
+            output supports reserve committees with predicted final price, sale likelihood, expected revenue, and a CSV
+            export for internal review.
+          </p>
         </div>
 
         {predictionResult && (

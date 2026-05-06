@@ -60,21 +60,60 @@ function DashboardContent() {
   const users = data?.users || [];
   const emailById = new Map(users.map((u: any) => [u.id, u.email]));
   const latestActivity = recentActivity[0];
+  const decisionSignals = [
+    {
+      title: 'Auction revenue forecast',
+      value: recentPredictions.length ? 'Ready' : 'Run needed',
+      desc: 'Forecast final price and sale probability before each sale cycle.',
+    },
+    {
+      title: 'Reserve policy guidance',
+      value: 'Model-led',
+      desc: 'Use expected revenue and probability constraints to support reserve decisions.',
+    },
+    {
+      title: 'Econometric evidence',
+      value: 'Explainable',
+      desc: 'Track price-index sensitivity, demand proxies, and feature drivers for sign-off.',
+    },
+  ];
 
   return (
-    <AppShell title="Overview" subtitle="Operational snapshot and quick links">
+    <AppShell title="Overview" subtitle="Auction forecasting cockpit and model governance snapshot">
+      <div className="mb-6 overflow-hidden rounded-3xl bg-gradient-to-r from-slate-950 via-indigo-950 to-slate-900 p-6 text-white shadow-xl">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <div className="text-sm font-medium text-indigo-200">Okavango Diamond Company decision support</div>
+            <h1 className="mt-2 text-3xl font-bold">Econometrics-informed auction intelligence</h1>
+            <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-200">
+              Monitor datasets, run price and sale-probability forecasts, explain model drivers, and turn auction signals
+              into reserve-price recommendations and executive reports.
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Link href="/forecast" className="btn-primary">
+              Run forecast
+            </Link>
+            <Link href="/reports" className="btn-secondary">
+              Generate report
+            </Link>
+          </div>
+        </div>
+        <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
+          {decisionSignals.map((signal) => (
+            <div key={signal.title} className="rounded-2xl border border-white/10 bg-white/10 p-4">
+              <div className="text-xs uppercase tracking-wide text-slate-300">{signal.title}</div>
+              <div className="mt-2 text-2xl font-bold">{signal.value}</div>
+              <p className="mt-2 text-sm text-slate-200">{signal.desc}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
       <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="text-sm text-gray-600">Auction operations</div>
           <h1 className="text-2xl font-bold text-gray-900">Today’s overview</h1>
-        </div>
-        <div className="flex gap-2">
-          <Link href="/forecast" className="btn-primary">
-            Run forecast
-          </Link>
-          <Link href="/reports" className="btn-secondary">
-            Generate report
-          </Link>
         </div>
       </div>
 

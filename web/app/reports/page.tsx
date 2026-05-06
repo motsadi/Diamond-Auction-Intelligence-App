@@ -56,6 +56,20 @@ function ReportsContent() {
   const [report, setReport] = useState<ReportData | null>(null);
 
   const selectedDs = datasets.find((ds: any) => ds.id === selectedDataset) || staticDataset;
+  const reportSections = [
+    {
+      title: 'Forecast performance',
+      desc: 'Shows how accurately the selected model predicts auction value and sale outcomes.',
+    },
+    {
+      title: 'Economic drivers',
+      desc: 'Ranks the variables that explain price and sale probability, supporting commercial interpretation.',
+    },
+    {
+      title: 'Data diagnostics',
+      desc: 'Includes distributions and data-quality checks so model recommendations remain auditable.',
+    },
+  ];
 
   const priceImportance = useMemo(
     () => toTopNImportance(report?.shap?.price_importance, 12),
@@ -167,9 +181,13 @@ function ReportsContent() {
     </style>
   </head>
   <body>
-    <h1>Diamond Auction Intelligence – Report</h1>
+    <h1>Diamond Auction Intelligence - Econometric Auction Report</h1>
     <div class="muted">Generated at: ${report.generatedAt}</div>
     <div class="muted">Dataset: ${report.datasetName} (${report.datasetId})</div>
+    <p class="muted" style="margin-top:12px;">
+      This report combines auction forecasting, econometric diagnostics, and model explainability to support reserve
+      pricing, sale-probability review, and executive auction planning.
+    </p>
 
     <h2 style="margin-top:20px;">Executive summary</h2>
     <div class="grid">
@@ -224,7 +242,7 @@ function ReportsContent() {
   return (
     <AppShell
       title="Reports"
-      subtitle="Generate print-ready operational reports"
+      subtitle="Generate executive auction reports with forecasting, diagnostics, and explainability"
       actions={
         report ? (
           <div className="flex items-center gap-2">
@@ -244,9 +262,11 @@ function ReportsContent() {
       <div className="card p-6">
         <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div className="min-w-0">
-            <h1 className="text-2xl font-bold text-gray-900">Report generation</h1>
+            <div className="text-sm font-semibold text-indigo-700">ODC auction decision pack</div>
+            <h1 className="mt-1 text-2xl font-bold text-gray-900">Econometric auction report generation</h1>
             <p className="mt-1 text-sm text-gray-600">
-              Produces an operational snapshot combining forecast metrics, analysis summaries, and feature importance.
+              Produces an executive snapshot combining forecast metrics, auction data diagnostics, and explainable model
+              drivers for reserve-price and sale-strategy review.
             </p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -281,6 +301,15 @@ function ReportsContent() {
         </div>
       </div>
 
+      <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
+        {reportSections.map((section) => (
+          <div key={section.title} className="rounded-2xl border border-indigo-100 bg-indigo-50/60 p-5">
+            <div className="text-sm font-semibold text-indigo-900">{section.title}</div>
+            <p className="mt-2 text-sm leading-6 text-indigo-950/75">{section.desc}</p>
+          </div>
+        ))}
+      </div>
+
       {report ? (
         <div className="mt-6 space-y-6">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -302,6 +331,16 @@ function ReportsContent() {
                 {(Number(report.forecast?.metrics?.sale_accuracy ?? 0) * 100).toFixed(1)}%
               </div>
             </div>
+          </div>
+
+          <div className="card p-6">
+            <h2 className="text-lg font-semibold text-gray-900">Executive interpretation</h2>
+            <p className="mt-2 text-sm leading-6 text-gray-600">
+              Use these results as model evidence for auction planning: Price R2 indicates how much price variation is
+              explained by the current specification, MAE gives the typical pricing error, and sale accuracy supports
+              clearance-risk review. Feature importance should be read alongside commercial judgement and current market
+              conditions before reserve decisions are finalized.
+            </p>
           </div>
 
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">

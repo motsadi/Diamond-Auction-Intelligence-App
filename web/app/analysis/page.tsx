@@ -43,10 +43,36 @@ function AnalysisContentInner() {
   };
 
   const selectedDs = datasets.find((ds: any) => ds.id === selectedDataset);
+  const analysisQuestions = [
+    'Which auction variables have enough quality and coverage to trust in a model?',
+    'Which price, demand, and quality indicators move together before forecasting?',
+    'Where do missing values or outliers create model risk for reserve-price decisions?',
+  ];
 
   return (
-    <AppShell title="Analysis" subtitle="Missingness, distributions, correlations">
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Exploratory Data Analysis</h1>
+    <AppShell title="Analysis" subtitle="Data quality, econometric diagnostics, and auction signal review">
+      <div className="mb-6 rounded-3xl border border-indigo-100 bg-gradient-to-r from-indigo-50 to-white p-6 shadow-sm">
+        <div className="grid gap-6 lg:grid-cols-[1fr_0.9fr]">
+          <div>
+            <div className="text-sm font-semibold text-indigo-700">Pre-model econometric diagnostics</div>
+            <h1 className="mt-2 text-2xl font-bold text-gray-900">Exploratory Data Analysis</h1>
+            <p className="mt-3 text-sm leading-6 text-gray-600">
+              Check data quality, distributions, and correlations before training auction forecasts. This makes the model
+              story clearer: we are not only predicting, we are validating the economic signals behind the auction outcome.
+            </p>
+          </div>
+          <div className="rounded-2xl border border-indigo-100 bg-white p-4">
+            <div className="text-sm font-semibold text-gray-900">Questions this screen should answer</div>
+            <div className="mt-3 space-y-2">
+              {analysisQuestions.map((question) => (
+                <div key={question} className="rounded-xl bg-gray-50 px-3 py-2 text-sm text-gray-700">
+                  {question}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
 
         <div className="card p-6 mb-6">
           <div className="space-y-4">
