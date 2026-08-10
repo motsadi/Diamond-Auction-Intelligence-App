@@ -1,433 +1,244 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { ProtectedRoute } from '@/components/ProtectedRoute';
-import { AppShell } from '@/components/AppShell';
+import { useMemo, useState } from 'react';
+import { CheckCircle2, FileBarChart, Loader2, Play, Printer, ShieldCheck } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { staticDataset, usDiamondsDataset, STATIC_DATASET_ID, US_DIAMONDS_DATASET_ID } from '@/lib/staticDataset';
+import { AppShell } from '@/components/AppShell';
+import { ProtectedRoute } from '@/components/ProtectedRoute';
+import { STATIC_DATASET_ID, staticDataset } from '@/lib/staticDataset';
 import { useAuth } from '@/lib/auth';
 import { logActivity } from '@/lib/activity';
-import {
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  CartesianGrid,
-} from 'recharts';
 
-type ReportData = {
+type Report = {
   generatedAt: string;
-  datasetId: string;
-  datasetName: string;
   analysis: any;
   forecast: any;
-  shap: any;
+  importance: any;
 };
 
-function downloadText(filename: string, text: string, mime: string) {
-  const blob = new Blob([text], { type: mime });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
+const money = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+  maximumFractionDigits: 0,
+});
 
-function toTopNImportance(obj: Record<string, number> | undefined, n = 10) {
-  if (!obj) return [];
-  return Object.entries(obj)
-    .sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0))
-    .slice(0, n)
-    .map(([feature, importance]) => ({ feature, importance }));
+const featureLabels: Record<string, string> = {
+  carat: 'Carat weight',
+  viewings: 'Buyer viewings',
+  price_index: 'Market price index',
+  'color:D': 'Colour D',
+  'color:E': 'Colour E',
+  'color:F': 'Colour F',
+  'color:G': 'Colour G',
+  'color:H': 'Colour H',
+  'color:I': 'Colour I',
+  'color:J': 'Colour J',
+};
+
+function decodeRows(encoded: string) {
+  const lines = atob(encoded).trim().split(/\r?\n/);
+  const headers = lines[0].split(',');
+  return lines.slice(1).map((line) => {
+    const values = line.split(',');
+    return Object.fromEntries(headers.map((header, index) => [header, values[index]]));
+  });
 }
 
 function ReportsContent() {
   const { user } = useAuth();
-  const actorId = user?.id ?? '';
-  const datasets = [staticDataset, usDiamondsDataset];
-  const [selectedDataset, setSelectedDataset] = useState(STATIC_DATASET_ID);
-  const [modelName, setModelName] = useState('Gradient Boosting');
   const [isGenerating, setIsGenerating] = useState(false);
-  const [report, setReport] = useState<ReportData | null>(null);
+  const [report, setReport] = useState<Report | null>(null);
 
-  const selectedDs = datasets.find((ds: any) => ds.id === selectedDataset) || staticDataset;
-  const reportSections = [
-    {
-      title: 'Forecast performance',
-      desc: 'Shows how accurately the selected model predicts auction value and sale outcomes.',
-    },
-    {
-      title: 'Economic drivers',
-      desc: 'Ranks the variables that explain price and sale probability, supporting commercial interpretation.',
-    },
-    {
-      title: 'Data diagnostics',
-      desc: 'Includes distributions and data-quality checks so model recommendations remain auditable.',
-    },
-  ];
-
-  const priceImportance = useMemo(
-    () => toTopNImportance(report?.shap?.price_importance, 12),
-    [report?.shap]
-  );
-  const saleImportance = useMemo(
-    () => toTopNImportance(report?.shap?.sale_importance, 12),
-    [report?.shap]
-  );
-
-  const modelOptions =
-    selectedDataset === US_DIAMONDS_DATASET_ID ? ['Ridge Regression', 'Random Forest'] : ['Gradient Boosting'];
-
-  useEffect(() => {
-    if (selectedDataset === US_DIAMONDS_DATASET_ID) {
-      if (!/ridge|random\s*forest/i.test(modelName)) setModelName('Ridge Regression');
-    } else {
-      if (/ridge|random\s*forest/i.test(modelName)) setModelName('Gradient Boosting');
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedDataset]);
-
-  const handleGenerate = async () => {
+  const generateReport = async () => {
     setIsGenerating(true);
-    setReport(null);
     try {
-      const [analysisRes, forecastRes, shapRes] = await Promise.all([
+      const [analysisResponse, forecastResponse, importanceResponse] = await Promise.all([
         fetch('/api/analysis', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ datasetId: selectedDataset }),
+          body: JSON.stringify({ datasetId: STATIC_DATASET_ID }),
         }),
         fetch('/predict', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ datasetId: selectedDataset, modelName, horizon: 1 }),
+          body: JSON.stringify({ datasetId: STATIC_DATASET_ID, modelName: 'Interpretable auction baseline' }),
         }),
         fetch('/shap', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ datasetId: selectedDataset, modelName }),
+          body: JSON.stringify({ datasetId: STATIC_DATASET_ID, modelName: 'Interpretable auction baseline' }),
         }),
       ]);
+      const [analysis, forecast, importance] = await Promise.all([
+        analysisResponse.json(),
+        forecastResponse.json(),
+        importanceResponse.json(),
+      ]);
+      if (!analysisResponse.ok || !analysis.success) throw new Error(analysis.message || 'Data analysis failed');
+      if (!forecastResponse.ok || !forecast.success) throw new Error(forecast.message || 'Forecast failed');
+      if (!importanceResponse.ok || !importance.success) throw new Error(importance.message || 'Model explanation failed');
 
-      const analysis = await analysisRes.json();
-      const forecast = await forecastRes.json();
-      const shap = await shapRes.json();
-
-      if (!analysisRes.ok || !analysis?.success) throw new Error(analysis?.message || 'Analysis failed');
-      if (!forecastRes.ok || !forecast?.success) throw new Error(forecast?.message || 'Forecast failed');
-      if (!shapRes.ok || !shap?.success) throw new Error(shap?.message || 'Explainability failed');
-
-      const next: ReportData = {
-        generatedAt: new Date().toISOString(),
-        datasetId: selectedDataset,
-        datasetName: selectedDs.name,
-        analysis,
-        forecast,
-        shap,
-      };
-      setReport(next);
-      toast.success('Report generated');
-      void logActivity({
-        actorId,
-        action: 'report.generate',
-        entityType: 'report',
-        entityId: selectedDataset,
-        meta: {
-          datasetId: selectedDataset,
-          datasetName: selectedDs.name,
-          modelName,
-          host: typeof window !== 'undefined' ? window.location.host : undefined,
-        },
-      });
-    } catch (e: any) {
-      toast.error(e?.message || 'Network error');
+      const generatedAt = new Date().toISOString();
+      setReport({ generatedAt, analysis, forecast, importance });
+      toast.success('Decision report ready');
+      if (user?.id) {
+        void logActivity({
+          actorId: user.id,
+          action: 'report.generate',
+          entityType: 'report',
+          entityId: STATIC_DATASET_ID,
+          meta: { datasetName: staticDataset.name, modelName: 'Interpretable auction baseline' },
+        });
+      }
+    } catch (error: any) {
+      toast.error(error?.message || 'Unable to generate report');
     } finally {
       setIsGenerating(false);
     }
   };
 
-  const handleDownloadJson = () => {
-    if (!report) return;
-    downloadText(
-      `DAI-report-${report.datasetId}-${new Date(report.generatedAt).toISOString().slice(0, 10)}.json`,
-      JSON.stringify(report, null, 2),
-      'application/json'
+  const summary = useMemo(() => {
+    if (!report) return null;
+    const rows = decodeRows(report.forecast.outputCsvData);
+    const expectedRevenue = rows.reduce(
+      (total, row) => total + Number(row.pred_price) * Number(row.pred_sale_proba),
+      0
     );
-  };
-
-  const handleDownloadHtml = () => {
-    if (!report) return;
-    const html = `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>DAI Report</title>
-    <style>
-      body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 32px; color: #0f172a; }
-      h1,h2 { margin: 0 0 8px; }
-      .muted { color: #475569; }
-      .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 16px; }
-      .card { border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px; background: #fff; }
-      table { width: 100%; border-collapse: collapse; }
-      th, td { border-top: 1px solid #e2e8f0; padding: 6px 8px; font-size: 12px; text-align: left; }
-      th { color: #475569; font-weight: 600; }
-      code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; }
-    </style>
-  </head>
-  <body>
-    <h1>Diamond Auction Intelligence - Econometric Auction Report</h1>
-    <div class="muted">Generated at: ${report.generatedAt}</div>
-    <div class="muted">Dataset: ${report.datasetName} (${report.datasetId})</div>
-    <p class="muted" style="margin-top:12px;">
-      This report combines auction forecasting, econometric diagnostics, and model explainability to support reserve
-      pricing, sale-probability review, and executive auction planning.
-    </p>
-
-    <h2 style="margin-top:20px;">Executive summary</h2>
-    <div class="grid">
-      <div class="card"><div class="muted">Price R²</div><div style="font-size:22px;font-weight:700;">${Number(
-        report.forecast?.metrics?.price_r2 ?? 0
-      ).toFixed(3)}</div></div>
-      <div class="card"><div class="muted">Price MAE</div><div style="font-size:22px;font-weight:700;">${Number(
-        report.forecast?.metrics?.price_mae ?? 0
-      ).toFixed(2)}</div></div>
-      <div class="card"><div class="muted">Sale accuracy</div><div style="font-size:22px;font-weight:700;">${(
-        Number(report.forecast?.metrics?.sale_accuracy ?? 0) * 100
-      ).toFixed(1)}%</div></div>
-    </div>
-
-    <h2 style="margin-top:20px;">Distributions (summary)</h2>
-    <div class="card">
-      <table>
-        <thead>
-          <tr><th>Column</th><th>Count</th><th>Mean</th><th>Std</th><th>Min</th><th>Max</th></tr>
-        </thead>
-        <tbody>
-          ${Object.entries(report.analysis?.distributions || {})
-            .map(([col, d]: any) => {
-              return `<tr>
-                <td><code>${col}</code></td>
-                <td>${d.count}</td>
-                <td>${Number(d.mean).toFixed(2)}</td>
-                <td>${Number(d.std).toFixed(2)}</td>
-                <td>${Number(d.min).toFixed(2)}</td>
-                <td>${Number(d.max).toFixed(2)}</td>
-              </tr>`;
-            })
-            .join('')}
-        </tbody>
-      </table>
-    </div>
-  </body>
-</html>`;
-    downloadText(
-      `DAI-report-${report.datasetId}-${new Date(report.generatedAt).toISOString().slice(0, 10)}.html`,
-      html,
-      'text/html'
-    );
-  };
-
-  const handlePrint = () => {
-    if (!report) return;
-    // Use browser “Save to PDF” for the most reliable export on Vercel.
-    window.print();
-  };
+    const averageSaleChance = rows.reduce((total, row) => total + Number(row.pred_sale_proba), 0) / rows.length;
+    const exceptions = rows.filter((row) => {
+      const current = Number(row.reserve_price);
+      const recommended = Number(row.recommended_reserve);
+      return Math.abs(current - recommended) / Math.max(recommended, 1) > 0.12 || Number(row.pred_sale_proba) < 0.65;
+    }).length;
+    const drivers = Object.entries(report.importance.price_importance as Record<string, number>)
+      .sort(([, left], [, right]) => right - left)
+      .slice(0, 5)
+      .map(([feature, value]) => ({ feature, value }));
+    return { rows, expectedRevenue, averageSaleChance, exceptions, drivers };
+  }, [report]);
 
   return (
     <AppShell
-      title="Reports"
-      subtitle="Generate executive auction reports with forecasting, diagnostics, and explainability"
+      title="Auction report"
+      subtitle="A concise decision pack for pricing review and management"
       actions={
         report ? (
-          <div className="flex items-center gap-2">
-            <button className="btn-secondary" onClick={handlePrint}>
-              Print / Save PDF
-            </button>
-            <button className="btn-secondary" onClick={handleDownloadJson}>
-              Download JSON
-            </button>
-            <button className="btn-secondary" onClick={handleDownloadHtml}>
-              Download HTML
-            </button>
-          </div>
+          <button type="button" className="btn-primary" onClick={() => window.print()}>
+            <Printer className="h-4 w-4" /> Print / Save PDF
+          </button>
         ) : null
       }
     >
-      <div className="card p-6">
-        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-          <div className="min-w-0">
-            <div className="text-sm font-semibold text-indigo-700">ODC auction decision pack</div>
-            <h1 className="mt-1 text-2xl font-bold text-gray-900">Econometric auction report generation</h1>
-            <p className="mt-1 text-sm text-gray-600">
-              Produces an executive snapshot combining forecast metrics, auction data diagnostics, and explainable model
-              drivers for reserve-price and sale-strategy review.
+      {!report ? (
+        <div className="mx-auto max-w-3xl">
+          <section className="card p-7 sm:p-9">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-violet-50 text-violet-700">
+              <FileBarChart className="h-5 w-5" />
+            </div>
+            <h1 className="mt-6 text-2xl font-semibold tracking-tight text-slate-950">Create the auction decision report</h1>
+            <p className="mt-3 text-sm leading-6 text-slate-600">
+              Produce one consistent summary of data readiness, machine-learning performance, portfolio outlook,
+              reserve exceptions and the main value drivers.
             </p>
-          </div>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <div>
-              <label className="label mb-1">Dataset</label>
-              <select
-                value={selectedDataset}
-                onChange={(e) => setSelectedDataset(e.target.value)}
-                className="input"
-              >
-                {datasets.map((ds: any) => (
-                  <option key={ds.id} value={ds.id}>
-                    {ds.name} ({ds.rowCount} rows)
-                  </option>
-                ))}
-              </select>
+            <div className="mt-7 rounded-xl border border-slate-200 bg-slate-50 p-5">
+              <div className="font-semibold text-slate-900">Report scope</div>
+              <div className="mt-3 grid gap-3 text-sm text-slate-600 sm:grid-cols-3">
+                <span>• {staticDataset.rowCount} auction lots</span>
+                <span>• Holdout model validation</span>
+                <span>• Reserve exception summary</span>
+              </div>
             </div>
-            <div>
-              <label className="label mb-1">Model</label>
-              <select value={modelName} onChange={(e) => setModelName(e.target.value)} className="input">
-                {modelOptions.map((m) => (
-                  <option key={m} value={m}>
-                    {m}
-                  </option>
-                ))}
-              </select>
+            <div className="mt-6 flex flex-col gap-4 border-t border-slate-200 pt-6 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-2 text-xs leading-5 text-slate-500">
+                <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-violet-700" />
+                Results remain advisory and are labelled as simulated.
+              </div>
+              <button type="button" onClick={generateReport} disabled={isGenerating} className="btn-primary min-w-44">
+                {isGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                {isGenerating ? 'Generating…' : 'Generate report'}
+              </button>
             </div>
-            <button className="btn-primary h-10" onClick={handleGenerate} disabled={isGenerating}>
-              {isGenerating ? 'Generating…' : 'Generate report'}
-            </button>
-          </div>
+          </section>
         </div>
-      </div>
-
-      <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
-        {reportSections.map((section) => (
-          <div key={section.title} className="rounded-2xl border border-indigo-100 bg-indigo-50/60 p-5">
-            <div className="text-sm font-semibold text-indigo-900">{section.title}</div>
-            <p className="mt-2 text-sm leading-6 text-indigo-950/75">{section.desc}</p>
-          </div>
-        ))}
-      </div>
-
-      {report ? (
-        <div className="mt-6 space-y-6">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <div className="card p-5">
-              <div className="text-sm text-gray-600">Price R²</div>
-              <div className="mt-1 text-2xl font-bold text-gray-900">
-                {Number(report.forecast?.metrics?.price_r2 ?? 0).toFixed(3)}
-              </div>
-            </div>
-            <div className="card p-5">
-              <div className="text-sm text-gray-600">Price MAE</div>
-              <div className="mt-1 text-2xl font-bold text-gray-900">
-                {Number(report.forecast?.metrics?.price_mae ?? 0).toFixed(2)}
-              </div>
-            </div>
-            <div className="card p-5">
-              <div className="text-sm text-gray-600">Sale accuracy</div>
-              <div className="mt-1 text-2xl font-bold text-gray-900">
-                {(Number(report.forecast?.metrics?.sale_accuracy ?? 0) * 100).toFixed(1)}%
-              </div>
-            </div>
-          </div>
-
-          <div className="card p-6">
-            <h2 className="text-lg font-semibold text-gray-900">Executive interpretation</h2>
-            <p className="mt-2 text-sm leading-6 text-gray-600">
-              Use these results as model evidence for auction planning: Price R2 indicates how much price variation is
-              explained by the current specification, MAE gives the typical pricing error, and sale accuracy supports
-              clearance-risk review. Feature importance should be read alongside commercial judgement and current market
-              conditions before reserve decisions are finalized.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <div className="card p-6">
-              <h2 className="text-lg font-semibold text-gray-900">Top price drivers</h2>
-              <p className="mt-1 text-sm text-gray-600">Normalized feature importance (demo).</p>
-              <div className="mt-4 h-80">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={priceImportance} layout="vertical" margin={{ left: 16, right: 16 }}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis type="number" domain={[0, 'dataMax']} />
-                    <YAxis type="category" dataKey="feature" width={140} />
-                    <Tooltip />
-                    <Bar dataKey="importance" fill="#4f46e5" radius={[6, 6, 6, 6]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            {saleImportance.length === 0 ? (
-              <div className="card p-6">
-                <h2 className="text-lg font-semibold text-gray-900">Secondary drivers</h2>
-                <p className="mt-1 text-sm text-gray-600">
-                  This dataset does not include a sale-probability model. Use the price drivers on the left.
+      ) : summary ? (
+        <article className="space-y-6">
+          <header className="card p-6 sm:p-8">
+            <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <div className="text-sm font-semibold text-emerald-700">Okavango Diamond Company</div>
+                <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">Pre-auction decision report</h1>
+                <p className="mt-2 text-sm text-slate-500">
+                  Simulated portfolio · Generated {new Date(report.generatedAt).toLocaleString()}
                 </p>
               </div>
-            ) : (
-              <div className="card p-6">
-                <h2 className="text-lg font-semibold text-gray-900">Top sale-probability drivers</h2>
-                <p className="mt-1 text-sm text-gray-600">Normalized feature importance (demo).</p>
-                <div className="mt-4 h-80">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={saleImportance} layout="vertical" margin={{ left: 16, right: 16 }}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis type="number" domain={[0, 'dataMax']} />
-                      <YAxis type="category" dataKey="feature" width={140} />
-                      <Tooltip />
-                      <Bar dataKey="importance" fill="#10b981" radius={[6, 6, 6, 6]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-            )}
-          </div>
+              <span className="status-badge bg-emerald-50 text-emerald-700 ring-emerald-600/20">
+                <CheckCircle2 className="mr-1 h-3 w-3" /> Model complete
+              </span>
+            </div>
+          </header>
 
-          <div className="card p-6">
-            <h2 className="text-lg font-semibold text-gray-900">Dataset summary (distributions)</h2>
-            <p className="mt-1 text-sm text-gray-600">Count/mean/std/min/max for key numeric columns.</p>
-            <div className="mt-4 overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead>
-                  <tr className="text-left text-gray-500">
-                    <th className="py-2 pr-6">Column</th>
-                    <th className="py-2 pr-6">Count</th>
-                    <th className="py-2 pr-6">Mean</th>
-                    <th className="py-2 pr-6">Std</th>
-                    <th className="py-2 pr-6">Min</th>
-                    <th className="py-2">Max</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {Object.entries(report.analysis?.distributions || {}).map(([col, d]: any) => (
-                    <tr key={col} className="border-t">
-                      <td className="py-2 pr-6 font-medium text-gray-900">{col}</td>
-                      <td className="py-2 pr-6 text-gray-700">{d.count}</td>
-                      <td className="py-2 pr-6 text-gray-700">{Number(d.mean).toFixed(2)}</td>
-                      <td className="py-2 pr-6 text-gray-700">{Number(d.std).toFixed(2)}</td>
-                      <td className="py-2 pr-6 text-gray-700">{Number(d.min).toFixed(2)}</td>
-                      <td className="py-2 text-gray-700">{Number(d.max).toFixed(2)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {[
+              ['Expected revenue', money.format(summary.expectedRevenue), 'Value weighted by sale chance'],
+              ['Expected clearance', `${Math.round(summary.averageSaleChance * 100)}%`, `Across ${summary.rows.length} lots`],
+              ['Reserve exceptions', summary.exceptions.toString(), 'Require pricing review'],
+              ['Typical price error', money.format(report.forecast.metrics.price_mae), `${report.forecast.metrics.evaluation_rows || 100} held-out lots`],
+            ].map(([label, value, detail]) => (
+              <div key={label} className="metric-card">
+                <div className="text-2xl font-semibold tracking-tight text-slate-950">{value}</div>
+                <div className="mt-2 text-sm font-medium text-slate-700">{label}</div>
+                <div className="mt-1 text-xs text-slate-400">{detail}</div>
+              </div>
+            ))}
+          </section>
+
+          <section className="grid gap-6 lg:grid-cols-[1fr_360px]">
+            <div className="card p-6">
+              <h2 className="section-title">Management interpretation</h2>
+              <div className="mt-5 space-y-4 text-sm leading-6 text-slate-600">
+                <p>
+                  The model estimates {money.format(summary.expectedRevenue)} in clearance-adjusted portfolio revenue.
+                  {summary.exceptions} lots fall outside the current reserve policy tolerance or have lower demand confidence.
+                </p>
+                <p>
+                  Review exceptions individually in the auction workbook. Do not apply a portfolio-wide reserve change
+                  without considering current buyer interest, grading evidence and comparable market outcomes.
+                </p>
+                <p>
+                  The typical holdout error is {money.format(report.forecast.metrics.price_mae)}. This uncertainty should
+                  be reflected in committee judgement, particularly for unusual or high-value lots.
+                </p>
+              </div>
             </div>
-            <div className="mt-4 text-xs text-gray-500">
-              Generated at {new Date(report.generatedAt).toLocaleString()} for dataset {report.datasetName}.
+
+            <div className="card p-6">
+              <h2 className="section-title">Main value drivers</h2>
+              <p className="section-subtitle">Relative influence in the fitted model.</p>
+              <div className="mt-5 space-y-4">
+                {summary.drivers.map((driver) => {
+                  const max = summary.drivers[0]?.value || 1;
+                  return (
+                    <div key={driver.feature}>
+                      <div className="mb-1.5 flex items-center justify-between text-xs">
+                        <span className="font-medium text-slate-700">{featureLabels[driver.feature] || driver.feature.replace(':', ' ')}</span>
+                        <span className="text-slate-400">{Math.round(driver.value * 100)}%</span>
+                      </div>
+                      <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
+                        <div className="h-full rounded-full bg-violet-600" style={{ width: `${(driver.value / max) * 100}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        </div>
-      ) : (
-        <div className="mt-6 card p-6">
-          <div className="text-sm text-gray-600">
-            Select a dataset and click <span className="font-semibold text-gray-900">Generate report</span>. This will
-            run analysis + forecast + explainability using the built-in demo backend.
-          </div>
-        </div>
-      )}
+          </section>
+
+          <footer className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-xs leading-5 text-amber-900">
+            This demonstration uses simulated data. Production decisions require approved ODC auction records, authorised
+            pricing review and documented committee sign-off.
+          </footer>
+        </article>
+      ) : null}
     </AppShell>
   );
 }
@@ -439,5 +250,3 @@ export default function ReportsPage() {
     </ProtectedRoute>
   );
 }
-
-

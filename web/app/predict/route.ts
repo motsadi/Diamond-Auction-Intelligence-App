@@ -6,6 +6,7 @@ import {
   recommendedReserve,
   priceMetrics,
   accuracy,
+  trainSyntheticAuctionRows,
 } from '@/lib/server/syntheticAuction';
 import { US_DIAMONDS_DATASET_ID } from '@/lib/staticDataset';
 import { loadTrainedUSDiamonds, predictUSDiamonds } from '@/lib/server/usDiamonds';
@@ -119,8 +120,30 @@ export async function POST(req: Request) {
     // Default: synthetic auction dataset
     const trained = await loadTrainedSyntheticAuction();
 
-    const yTrue = trained.rows.map((r) => r.final_price);
-    const soldTrue = trained.rows.map((r) => r.sold);
+    // Report performance on a deterministic 20% holdout rather than on the
+    // same rows used for fitting. The full model below still uses all rows for
+    // the operational lot estimates.
+    const evaluationRows = trained.rows.filter((_, index) => index % 5 === 0);
+    const fittingRows = trained.rows.filter((_, index) => index % 5 !== 0);
+    const evaluationModel = trainSyntheticAuctionRows(fittingRows);
+    const evaluationPrice = evaluationRows.map((r) =>
+      predictPrice(evaluationModel.priceModel, {
+        carat: r.carat,
+        viewings: r.viewings,
+        price_index: r.price_index,
+        color: r.color,
+        clarity: r.clarity,
+      })
+    );
+    const evaluationSale = evaluationRows.map((r) =>
+      predictSaleProba(evaluationModel.saleModel, {
+        carat: r.carat,
+        viewings: r.viewings,
+        price_index: r.price_index,
+        color: r.color,
+        clarity: r.clarity,
+      })
+    );
 
     const preds = trained.rows.map((r) => {
       const pred_price = predictPrice(trained.priceModel, {
@@ -155,8 +178,14 @@ export async function POST(req: Request) {
       };
     });
 
-    const metricsPrice = priceMetrics(yTrue, preds.map((p) => p.pred_price));
-    const saleAcc = accuracy(soldTrue, preds.map((p) => p.pred_sale_proba));
+    const metricsPrice = priceMetrics(
+      evaluationRows.map((r) => r.final_price),
+      evaluationPrice
+    );
+    const saleAcc = accuracy(
+      evaluationRows.map((r) => r.sold),
+      evaluationSale
+    );
 
     const previewRows = preds.slice(0, 10).map((p) => ({
       lot_id: p.lot_id,
@@ -174,6 +203,7 @@ export async function POST(req: Request) {
       'clarity',
       'viewings',
       'price_index',
+      'reserve_price',
       'pred_price',
       'pred_sale_proba',
       'recommended_reserve',
@@ -190,6 +220,7 @@ export async function POST(req: Request) {
           p.clarity,
           p.viewings,
           p.price_index,
+          p.reserve_price,
           p.pred_price,
           p.pred_sale_proba,
           p.recommended_reserve,
@@ -208,6 +239,7 @@ export async function POST(req: Request) {
         price_r2: metricsPrice.r2,
         price_mae: metricsPrice.mae,
         sale_accuracy: saleAcc,
+        evaluation_rows: evaluationRows.length,
       },
       previewRows,
       outputCsvData,

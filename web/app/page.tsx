@@ -86,7 +86,7 @@ export default function HomePage() {
               {[
                 'Demand elasticity and price index sensitivity',
                 'Lot-level reserve recommendation',
-                'SHAP explainability for commercial sign-off',
+                'Clear model drivers for commercial sign-off',
               ].map((item) => (
                 <div key={item} className="rounded-xl border border-white/10 bg-slate-950/30 px-4 py-3 text-sm text-slate-100">
                   {item}
