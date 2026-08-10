@@ -24,7 +24,7 @@ type Model = {
   clarityLevels: string[];
 };
 
-type Trained = {
+export type Trained = {
   rows: AuctionRow[];
   priceModel: Model;
   saleModel: Model;
@@ -46,16 +46,6 @@ function clamp01(x: number) {
   if (x < 0) return 0;
   if (x > 1) return 1;
   return x;
-}
-
-function sigmoid(z: number) {
-  // stable sigmoid
-  if (z >= 0) {
-    const ez = Math.exp(-z);
-    return 1 / (1 + ez);
-  }
-  const ez = Math.exp(z);
-  return ez / (1 + ez);
 }
 
 function mean(arr: number[]) {
@@ -264,6 +254,10 @@ export async function loadTrainedSyntheticAuction(): Promise<Trained> {
   return cached;
 }
 
+export function trainSyntheticAuctionRows(rows: AuctionRow[]): Trained {
+  return train(rows);
+}
+
 export function predictPrice(model: Model, input: { carat: number; viewings: number; price_index: number; color: string; clarity: string }) {
   const x = buildFeatureVector(input, model);
   return matVecMul([x], model.beta)[0];
@@ -275,7 +269,9 @@ export function predictSaleProba(
 ) {
   const x = buildFeatureVector(input, model);
   const raw = matVecMul([x], model.beta)[0];
-  return clamp01(sigmoid(raw));
+  // The fitted target is binary, so this is an interpretable linear-probability
+  // baseline. Clamp the estimate to a valid probability range.
+  return clamp01(raw);
 }
 
 export function recommendedReserve(predPrice: number, saleProba: number) {

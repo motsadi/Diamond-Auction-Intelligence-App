@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { Sidebar, type NavItem } from './Sidebar';
 import { useAuth } from '@/lib/auth';
 import { logActivity } from '@/lib/activity';
-import { Bell, Menu, UserRound } from 'lucide-react';
+import { Menu, UserRound } from 'lucide-react';
 
 type AppShellProps = {
   title?: string;
@@ -29,7 +29,6 @@ function getDefaultTitle(pathname: string) {
   if (pathname === '/simulation') return 'Auction Simulation & Strategy';
   if (pathname === '/grading') return 'Grading & Valuation';
   if (pathname === '/segmentation') return 'Segmentation & Recommendations';
-  if (pathname === '/copilot') return 'Auction Copilot';
   return 'Diamond Auction Intelligence';
 }
 
@@ -69,7 +68,6 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps) 
       '/dashboard',
       '/workbook',
       '/forecast',
-      '/copilot',
       '/analysis',
       '/reports',
       '/datasets',
@@ -100,7 +98,6 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps) 
       { href: '/dashboard', label: 'Command centre', group: 'Workspace', icon: 'overview' },
       { href: '/workbook', label: 'Auction workbook', group: 'Workspace', icon: 'workbook', badge: 'Live' },
       { href: '/forecast', label: 'Prediction & demand', group: 'Workspace', icon: 'forecast', badge: 'Live' },
-      { href: '/copilot', label: 'Auction Copilot', group: 'Workspace', icon: 'copilot', badge: 'Beta' },
       { href: '/reports', label: 'Reports', group: 'Workspace', icon: 'reports', badge: 'Live' },
       { href: '/analysis', label: 'Data diagnostics', group: 'Intelligence', icon: 'analysis' },
       { href: '/sentiment', label: 'Market sentiment & risk', group: 'Intelligence', icon: 'sentiment', badge: 'Planned' },
@@ -108,7 +105,6 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps) 
       { href: '/grading', label: 'Grading & valuation', group: 'Intelligence', icon: 'grading', badge: 'Planned' },
       { href: '/segmentation', label: 'Buyer intelligence', group: 'Intelligence', icon: 'segmentation', badge: 'Planned' },
       { href: '/datasets', label: 'Data library', group: 'Data & governance', icon: 'datasets' },
-      { href: '/history', label: 'Decision history', group: 'Data & governance', icon: 'history' },
     ];
     if (isAdmin) items.push({ href: '/admin', label: 'Administration', group: 'Data & governance', icon: 'admin' });
     return items;
@@ -150,11 +146,7 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps) 
 
             <div className="flex items-center gap-3">
               {actions ? <div className="hidden sm:block">{actions}</div> : null}
-              <button type="button" className="icon-btn relative" aria-label="Notifications">
-                <Bell className="h-4 w-4" />
-                <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-amber-500 ring-2 ring-white" />
-              </button>
-              <div className="hidden items-center gap-2.5 border-l border-slate-200 pl-3 sm:flex">
+              <div className="hidden items-center gap-2.5 sm:flex">
                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-600">
                   <UserRound className="h-4 w-4" />
                 </div>

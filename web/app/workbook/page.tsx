@@ -8,10 +8,7 @@ import {
   FileSpreadsheet,
   Filter,
   Loader2,
-  Plus,
-  RotateCcw,
   Search,
-  Trash2,
   Upload,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -135,30 +132,6 @@ function WorkbookContent() {
     setLots((current) => current.map((lot) => (lot.id === id ? { ...lot, ...patch } : lot)));
   };
 
-  const removeLot = (id: string) => {
-    setLots((current) => current.filter((lot) => lot.id !== id));
-  };
-
-  const addLot = () => {
-    const id = `NEW-${String(lots.length + 1).padStart(4, '0')}`;
-    setLots((current) => [
-      {
-        id,
-        carat: 1,
-        color: 'G',
-        clarity: 'VS1',
-        viewings: 0,
-        priceIndex: 1,
-        currentReserve: 1000,
-        referenceValue: 1100,
-        saleChance: 0.45,
-        status: 'Draft',
-        note: '',
-      },
-      ...current,
-    ]);
-  };
-
   const importCsv = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -258,12 +231,6 @@ function WorkbookContent() {
               <button type="button" className="btn-secondary" onClick={() => fileInput.current?.click()}>
                 <Upload className="h-4 w-4" /> Import CSV
               </button>
-              <button type="button" className="btn-secondary" onClick={() => void loadDemo()}>
-                <RotateCcw className="h-4 w-4" /> Load demo
-              </button>
-              <button type="button" className="btn-secondary" onClick={addLot}>
-                <Plus className="h-4 w-4" /> Add lot
-              </button>
             </div>
           </div>
         </div>
@@ -346,7 +313,6 @@ function WorkbookContent() {
                   <th className="px-3 py-3">Sale chance</th>
                   <th className="px-3 py-3">Decision</th>
                   <th className="px-3 py-3">Committee note</th>
-                  <th className="px-3 py-3" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -381,11 +347,6 @@ function WorkbookContent() {
                         </select>
                       </td>
                       <td className="px-3 py-2"><input value={lot.note} onChange={(event) => updateLot(lot.id, { note: event.target.value })} placeholder="Add rationale…" className="workbook-cell w-44" /></td>
-                      <td className="px-3 py-2">
-                        <button type="button" onClick={() => removeLot(lot.id)} className="icon-btn h-8 w-8 hover:bg-rose-50 hover:text-rose-700" aria-label={`Remove ${lot.id}`}>
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </td>
                     </tr>
                   );
                 })}

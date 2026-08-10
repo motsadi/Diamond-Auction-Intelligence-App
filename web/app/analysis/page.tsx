@@ -1,214 +1,188 @@
 'use client';
 
-import { useState, Suspense } from 'react';
-import { ProtectedRoute } from '@/components/ProtectedRoute';
-import { AppShell } from '@/components/AppShell';
-import { useSearchParams } from 'next/navigation';
-import { staticDataset, usDiamondsDataset, STATIC_DATASET_ID } from '@/lib/staticDataset';
+import { useMemo, useState } from 'react';
+import { AlertTriangle, CheckCircle2, Database, Loader2, Play, ShieldCheck } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { AppShell } from '@/components/AppShell';
+import { ProtectedRoute } from '@/components/ProtectedRoute';
+import { STATIC_DATASET_ID, staticDataset } from '@/lib/staticDataset';
 
-function AnalysisContentInner() {
-  const searchParams = useSearchParams();
-  const preselectedDataset = searchParams.get('dataset');
+type Distribution = { count: number; mean: number; std: number; min: number; max: number };
+type AnalysisResult = {
+  missingness: Record<string, number>;
+  distributions: Record<string, Distribution>;
+  correlations: { columns: string[]; matrix: number[][] };
+};
 
-  const datasets = [staticDataset, usDiamondsDataset];
-  const [selectedDataset, setSelectedDataset] = useState(preselectedDataset || STATIC_DATASET_ID);
-  const [analysisData, setAnalysisData] = useState<any>(null);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
+const labels: Record<string, string> = {
+  carat: 'Carat weight',
+  viewings: 'Buyer viewings',
+  price_index: 'Market price index',
+  reserve_price: 'Reserve price',
+  final_price: 'Final price',
+  sold: 'Sold outcome',
+};
 
-  const handleAnalyze = async () => {
-    if (!selectedDataset) {
-      return;
-    }
+const money = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+  maximumFractionDigits: 0,
+});
 
-    setIsAnalyzing(true);
+function AnalysisContent() {
+  const [isRunning, setIsRunning] = useState(false);
+  const [result, setResult] = useState<AnalysisResult | null>(null);
+
+  const runAnalysis = async () => {
+    setIsRunning(true);
     try {
-      const res = await fetch('/api/analysis', {
+      const response = await fetch('/api/analysis', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ datasetId: selectedDataset }),
+        body: JSON.stringify({ datasetId: STATIC_DATASET_ID }),
       });
-      const json = await res.json();
-      if (!res.ok || !json?.success) {
-        throw new Error(json?.message || 'Analysis failed');
-      }
-      setAnalysisData(json);
-      toast.success('Analysis completed');
-    } catch (e: any) {
-      toast.error(e?.message || 'Network error');
-      setAnalysisData(null);
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.message || 'Data check failed');
+      setResult(data);
+      toast.success('Data readiness check complete');
+    } catch (error: any) {
+      toast.error(error?.message || 'Unable to check auction data');
     } finally {
-      setIsAnalyzing(false);
+      setIsRunning(false);
     }
   };
 
-  const selectedDs = datasets.find((ds: any) => ds.id === selectedDataset);
-  const analysisQuestions = [
-    'Which auction variables have enough quality and coverage to trust in a model?',
-    'Which price, demand, and quality indicators move together before forecasting?',
-    'Where do missing values or outliers create model risk for reserve-price decisions?',
-  ];
+  const summary = useMemo(() => {
+    if (!result) return null;
+    const missing = Object.values(result.missingness).reduce((total, value) => total + value, 0);
+    const columns = result.correlations.columns;
+    const finalPriceIndex = columns.indexOf('final_price');
+    const drivers = columns
+      .map((column, index) => ({
+        column,
+        correlation: finalPriceIndex >= 0 ? result.correlations.matrix[index][finalPriceIndex] : 0,
+      }))
+      .filter((item) => !['final_price', 'sold'].includes(item.column))
+      .sort((left, right) => Math.abs(right.correlation) - Math.abs(left.correlation));
+    return {
+      missing,
+      qualityScore: missing === 0 ? 100 : Math.max(0, 100 - missing / 5),
+      rows: result.distributions.carat?.count || 0,
+      averageReserve: result.distributions.reserve_price?.mean || 0,
+      averageFinal: result.distributions.final_price?.mean || 0,
+      clearance: (result.distributions.sold?.mean || 0) * 100,
+      drivers,
+    };
+  }, [result]);
 
   return (
-    <AppShell title="Analysis" subtitle="Data quality, econometric diagnostics, and auction signal review">
-      <div className="mb-6 rounded-3xl border border-indigo-100 bg-gradient-to-r from-indigo-50 to-white p-6 shadow-sm">
-        <div className="grid gap-6 lg:grid-cols-[1fr_0.9fr]">
-          <div>
-            <div className="text-sm font-semibold text-indigo-700">Pre-model econometric diagnostics</div>
-            <h1 className="mt-2 text-2xl font-bold text-gray-900">Exploratory Data Analysis</h1>
-            <p className="mt-3 text-sm leading-6 text-gray-600">
-              Check data quality, distributions, and correlations before training auction forecasts. This makes the model
-              story clearer: we are not only predicting, we are validating the economic signals behind the auction outcome.
+    <AppShell title="Data readiness" subtitle="Simple checks before auction modelling">
+      {!result ? (
+        <div className="mx-auto max-w-3xl">
+          <section className="card p-7 sm:p-9">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-700">
+              <Database className="h-5 w-5" />
+            </div>
+            <h1 className="mt-6 text-2xl font-semibold tracking-tight text-slate-950">Check the auction data before forecasting</h1>
+            <p className="mt-3 text-sm leading-6 text-slate-600">
+              Confirm that the working file is complete and that price, demand and lot attributes contain usable
+              signals. This prevents unreliable data from reaching the pricing model.
             </p>
-          </div>
-          <div className="rounded-2xl border border-indigo-100 bg-white p-4">
-            <div className="text-sm font-semibold text-gray-900">Questions this screen should answer</div>
-            <div className="mt-3 space-y-2">
-              {analysisQuestions.map((question) => (
-                <div key={question} className="rounded-xl bg-gray-50 px-3 py-2 text-sm text-gray-700">
-                  {question}
+
+            <div className="mt-7 rounded-xl border border-slate-200 bg-slate-50 p-5">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="font-semibold text-slate-900">{staticDataset.name}</div>
+                  <div className="mt-1 text-sm text-slate-500">{staticDataset.rowCount} simulated lots · {staticDataset.columns.length} fields</div>
                 </div>
-              ))}
+                <span className="status-badge bg-blue-50 text-blue-700 ring-blue-600/20">Working data</span>
+              </div>
             </div>
-          </div>
+
+            <div className="mt-6 flex flex-col gap-4 border-t border-slate-200 pt-6 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-2 text-xs leading-5 text-slate-500">
+                <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-blue-700" />
+                Checks completeness, ranges and relationships used by the model.
+              </div>
+              <button type="button" onClick={runAnalysis} disabled={isRunning} className="btn-primary min-w-44">
+                {isRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                {isRunning ? 'Checking data…' : 'Check data readiness'}
+              </button>
+            </div>
+          </section>
         </div>
-      </div>
-
-        <div className="card p-6 mb-6">
-          <div className="space-y-4">
+      ) : summary ? (
+        <div className="space-y-6">
+          <section className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Select Dataset
-              </label>
-              <select
-                value={selectedDataset}
-                onChange={(e) => {
-                  setSelectedDataset(e.target.value);
-                  setAnalysisData(null);
-                }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              >
-                <option value="">Choose a dataset...</option>
-                {datasets.map((ds: any) => (
-                  <option key={ds.id} value={ds.id}>
-                    {ds.name} ({ds.rowCount} rows)
-                  </option>
+              <div className="flex items-center gap-2 text-sm font-semibold text-emerald-700">
+                <CheckCircle2 className="h-4 w-4" /> Data check complete
+              </div>
+              <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">Auction data is ready for modelling</h1>
+              <p className="mt-1 text-sm text-slate-500">Review the commercial summary before running Prediction & Demand.</p>
+            </div>
+            <button type="button" onClick={runAnalysis} disabled={isRunning} className="text-sm font-semibold text-slate-600 hover:text-slate-950">Check again</button>
+          </section>
+
+          <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {[
+              ['Data quality', `${summary.qualityScore.toFixed(0)}%`, summary.missing ? `${summary.missing} missing values` : 'No missing values'],
+              ['Lots available', summary.rows.toLocaleString(), 'Complete working records'],
+              ['Average reserve', money.format(summary.averageReserve), `Average result ${money.format(summary.averageFinal)}`],
+              ['Historical clearance', `${summary.clearance.toFixed(1)}%`, 'Observed sold outcome'],
+            ].map(([label, value, detail]) => (
+              <div key={label} className="metric-card">
+                <div className="text-2xl font-semibold tracking-tight text-slate-950">{value}</div>
+                <div className="mt-2 text-sm font-medium text-slate-700">{label}</div>
+                <div className="mt-1 text-xs text-slate-400">{detail}</div>
+              </div>
+            ))}
+          </section>
+
+          <section className="grid gap-6 lg:grid-cols-[1fr_340px]">
+            <div className="card p-6">
+              <h2 className="section-title">Signals linked with final price</h2>
+              <p className="section-subtitle">Simple historical relationships; correlation does not prove causation.</p>
+              <div className="mt-6 space-y-5">
+                {summary.drivers.map((driver) => (
+                  <div key={driver.column}>
+                    <div className="mb-2 flex items-center justify-between text-sm">
+                      <span className="font-medium text-slate-700">{labels[driver.column] || driver.column}</span>
+                      <span className="font-semibold text-slate-900">{driver.correlation.toFixed(2)}</span>
+                    </div>
+                    <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                      <div
+                        className={`h-full rounded-full ${driver.correlation >= 0 ? 'bg-emerald-600' : 'bg-rose-500'}`}
+                        style={{ width: `${Math.abs(driver.correlation) * 100}%` }}
+                      />
+                    </div>
+                  </div>
                 ))}
-              </select>
+              </div>
             </div>
 
-            {selectedDs && (
-              <div className="bg-blue-50 p-4 rounded-md">
-                <p className="text-sm text-blue-800">
-                  <strong>Dataset:</strong> {selectedDs.name} | <strong>Rows:</strong> {selectedDs.rowCount} | <strong>Columns:</strong> {selectedDs.columns?.join(', ')}
+            <div className="space-y-6">
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5">
+                <div className="flex items-center gap-2 font-semibold text-emerald-950">
+                  <CheckCircle2 className="h-4 w-4" /> Ready to proceed
+                </div>
+                <p className="mt-3 text-sm leading-6 text-emerald-900/80">
+                  Required fields are complete and the dataset contains usable price and demand variation.
                 </p>
               </div>
-            )}
-
-            <button
-              onClick={handleAnalyze}
-              disabled={isAnalyzing || !selectedDataset}
-              className="btn-primary w-full"
-            >
-              {isAnalyzing ? 'Analyzing...' : 'Run Analysis'}
-            </button>
-          </div>
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-5">
+                <div className="flex items-center gap-2 font-semibold text-amber-950">
+                  <AlertTriangle className="h-4 w-4" /> Before production use
+                </div>
+                <p className="mt-3 text-sm leading-6 text-amber-900/80">
+                  Replace simulated records with approved ODC sale data and verify grades, buyer interest and final outcomes.
+                </p>
+              </div>
+            </div>
+          </section>
         </div>
-
-        {analysisData && (
-          <div className="space-y-6">
-            <div className="bg-white p-6 rounded-lg shadow-md">
-              <h2 className="text-xl font-semibold mb-4">Missing Values</h2>
-              <div className="overflow-x-auto">
-                <table className="min-w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-gray-500">
-                      <th className="py-2 pr-6">Column</th>
-                      <th className="py-2">Missing</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {Object.entries(analysisData.missingness || {}).map(([col, count]: any) => (
-                      <tr key={col} className="border-t">
-                        <td className="py-2 pr-6 font-medium text-gray-900">{col}</td>
-                        <td className="py-2 text-gray-700">{count}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            <div className="card p-6">
-              <h2 className="text-xl font-semibold mb-4">Distributions</h2>
-              <div className="overflow-x-auto">
-                <table className="min-w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-gray-500">
-                      <th className="py-2 pr-6">Column</th>
-                      <th className="py-2 pr-6">Count</th>
-                      <th className="py-2 pr-6">Mean</th>
-                      <th className="py-2 pr-6">Std</th>
-                      <th className="py-2 pr-6">Min</th>
-                      <th className="py-2">Max</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {Object.entries(analysisData.distributions || {}).map(([col, d]: any) => (
-                      <tr key={col} className="border-t">
-                        <td className="py-2 pr-6 font-medium text-gray-900">{col}</td>
-                        <td className="py-2 pr-6 text-gray-700">{d.count}</td>
-                        <td className="py-2 pr-6 text-gray-700">{Number(d.mean).toFixed(2)}</td>
-                        <td className="py-2 pr-6 text-gray-700">{Number(d.std).toFixed(2)}</td>
-                        <td className="py-2 pr-6 text-gray-700">{Number(d.min).toFixed(2)}</td>
-                        <td className="py-2 text-gray-700">{Number(d.max).toFixed(2)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            <div className="card p-6">
-              <h2 className="text-xl font-semibold mb-4">Correlations</h2>
-              <div className="overflow-x-auto">
-                <table className="min-w-full text-xs">
-                  <thead>
-                    <tr>
-                      <th className="py-2 pr-4 text-left text-gray-500"> </th>
-                      {(analysisData.correlations?.columns || []).map((c: string) => (
-                        <th key={c} className="py-2 px-2 text-left text-gray-500 whitespace-nowrap">
-                          {c}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(analysisData.correlations?.columns || []).map((rowName: string, i: number) => (
-                      <tr key={rowName} className="border-t">
-                        <td className="py-2 pr-4 font-medium text-gray-900 whitespace-nowrap">{rowName}</td>
-                        {(analysisData.correlations?.matrix?.[i] || []).map((v: number, j: number) => (
-                          <td key={`${i}-${j}`} className="py-2 px-2 text-gray-700">
-                            {Number(v).toFixed(2)}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
+      ) : null}
     </AppShell>
-  );
-}
-
-function AnalysisContent() {
-  return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="text-lg">Loading...</div></div>}>
-      <AnalysisContentInner />
-    </Suspense>
   );
 }
 
@@ -219,4 +193,3 @@ export default function AnalysisPage() {
     </ProtectedRoute>
   );
 }
-

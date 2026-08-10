@@ -3,7 +3,6 @@
 import Link from 'next/link';
 import {
   BarChart3,
-  Bot,
   BrainCircuit,
   ChartNoAxesCombined,
   ChevronLeft,
@@ -12,7 +11,6 @@ import {
   FileBarChart,
   Gauge,
   Gem,
-  History,
   LayoutDashboard,
   Settings,
   Sheet,
@@ -56,12 +54,10 @@ const icons = {
   analysis: BarChart3,
   reports: FileBarChart,
   datasets: Database,
-  history: History,
   sentiment: Gauge,
   simulation: SlidersHorizontal,
   grading: Gem,
   segmentation: Users,
-  copilot: Bot,
   admin: Settings,
 };
 

@@ -1,1235 +1,369 @@
 'use client';
 
-import { useEffect, useState, Suspense } from 'react';
-import { ProtectedRoute } from '@/components/ProtectedRoute';
-import { AppShell } from '@/components/AppShell';
-import { apiClient, OptimizeRequest, SurfaceRequest, ShapRequest } from '@/lib/api';
+import { useMemo, useState } from 'react';
+import {
+  AlertTriangle,
+  ArrowRight,
+  CheckCircle2,
+  Download,
+  Gauge,
+  Loader2,
+  Play,
+  ShieldCheck,
+  Sparkles,
+  TrendingUp,
+} from 'lucide-react';
 import toast from 'react-hot-toast';
-import { useSearchParams } from 'next/navigation';
-import dynamic from 'next/dynamic';
-import { staticDataset, usDiamondsDataset, STATIC_DATASET_ID, US_DIAMONDS_DATASET_ID } from '@/lib/staticDataset';
-import type { PlotParams } from 'react-plotly.js';
+import { AppShell } from '@/components/AppShell';
+import { ProtectedRoute } from '@/components/ProtectedRoute';
+import { STATIC_DATASET_ID, staticDataset } from '@/lib/staticDataset';
 import { useAuth } from '@/lib/auth';
 import { logActivity } from '@/lib/activity';
 
-const Plot = dynamic<PlotParams>(
-  () => import('react-plotly.js').then((mod) => mod.default),
-  { ssr: false }
-);
+type ForecastRow = {
+  lot_id: string;
+  carat: number;
+  color: string;
+  clarity: string;
+  viewings: number;
+  price_index: number;
+  reserve_price: number;
+  pred_price: number;
+  pred_sale_proba: number;
+  recommended_reserve: number;
+  actual_final_price: number;
+  actual_sold: number;
+};
 
-function ForecastContentInner() {
-  const searchParams = useSearchParams();
-  const preselectedDataset = searchParams.get('dataset');
+type ForecastResult = {
+  predictionId: string;
+  metrics: {
+    price_r2: number;
+    price_mae: number;
+    sale_accuracy: number;
+    evaluation_rows?: number;
+  };
+  rows: ForecastRow[];
+  importance: Array<{ feature: string; value: number }>;
+  csv: string;
+};
+
+const money = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+  maximumFractionDigits: 0,
+});
+
+const featureLabels: Record<string, string> = {
+  carat: 'Carat weight',
+  viewings: 'Buyer viewings',
+  price_index: 'Market price index',
+  'color:D': 'Colour D',
+  'color:E': 'Colour E',
+  'color:F': 'Colour F',
+  'color:G': 'Colour G',
+  'color:H': 'Colour H',
+  'color:I': 'Colour I',
+  'color:J': 'Colour J',
+};
+
+function decodeForecastCsv(encoded: string): { text: string; rows: ForecastRow[] } {
+  const text = atob(encoded);
+  const lines = text.trim().split(/\r?\n/);
+  const headers = lines[0].split(',');
+  const rows = lines.slice(1).map((line) => {
+    const values = line.split(',');
+    const record = Object.fromEntries(headers.map((header, index) => [header, values[index]]));
+    return {
+      lot_id: record.lot_id,
+      carat: Number(record.carat),
+      color: record.color,
+      clarity: record.clarity,
+      viewings: Number(record.viewings),
+      price_index: Number(record.price_index),
+      reserve_price: Number(record.reserve_price),
+      pred_price: Number(record.pred_price),
+      pred_sale_proba: Number(record.pred_sale_proba),
+      recommended_reserve: Number(record.recommended_reserve),
+      actual_final_price: Number(record.actual_final_price),
+      actual_sold: Number(record.actual_sold),
+    };
+  });
+  return { text, rows };
+}
+
+function ForecastContent() {
   const { user } = useAuth();
-  const actorId = user?.id ?? '';
-
-  const datasets = [staticDataset, usDiamondsDataset];
-  const [selectedDataset, setSelectedDataset] = useState(preselectedDataset || STATIC_DATASET_ID);
-  const [modelName, setModelName] = useState('Gradient Boosting');
-  const [horizon, setHorizon] = useState(1);
   const [isRunning, setIsRunning] = useState(false);
-  const [predictionResult, setPredictionResult] = useState<any>(null);
-  const auctionModelOptions = ['Gradient Boosting', 'Random Forest', 'Extra Trees'];
-  const diamondsModelOptions = ['Ridge Regression', 'Random Forest'];
-  const modelOptions = selectedDataset === US_DIAMONDS_DATASET_ID ? diamondsModelOptions : auctionModelOptions;
+  const [result, setResult] = useState<ForecastResult | null>(null);
+  const [showAll, setShowAll] = useState(false);
 
-  // Single-lot prediction state
-  const [singleCarat, setSingleCarat] = useState(1.0);
-  const [singleColor, setSingleColor] = useState('G');
-  const [singleClarity, setSingleClarity] = useState('VS1');
-  const [singleViewings, setSingleViewings] = useState(10);
-  const [singlePriceIndex, setSinglePriceIndex] = useState(1.0);
-  // US diamonds single prediction extra fields
-  const [singleCut, setSingleCut] = useState('Ideal');
-  const [singleDepth, setSingleDepth] = useState(61.5);
-  const [singleTable, setSingleTable] = useState(55);
-  const [singleX, setSingleX] = useState(3.95);
-  const [singleY, setSingleY] = useState(3.98);
-  const [singleZ, setSingleZ] = useState(2.43);
-  const [singlePrediction, setSinglePrediction] = useState<any>(null);
-  const [isPredictingSingle, setIsPredictingSingle] = useState(false);
-
-  // Valid options from dataset (for static dataset)
-  const colorOptions = ['D', 'E', 'F', 'G', 'H', 'I', 'J'];
-  const clarityOptions = ['IF', 'VVS1', 'VVS2', 'VS1', 'VS2', 'SI1', 'SI2', 'I1'];
-  const cutOptions = ['Fair', 'Good', 'Very Good', 'Premium', 'Ideal'];
-
-  // Optimization state
-  const [fixedColorOpt, setFixedColorOpt] = useState('G');
-  const [fixedClarityOpt, setFixedClarityOpt] = useState('VS1');
-  const [fixedCutOpt, setFixedCutOpt] = useState('Ideal');
-  const [optObjective, setOptObjective] = useState<'max_price' | 'max_prob' | 'target'>('max_price');
-  const [minProb, setMinProb] = useState(0.5);
-  const [nSamples, setNSamples] = useState(1000);
-  const [targetPrice, setTargetPrice] = useState(5000);
-  const [targetProb, setTargetProb] = useState(0.8);
-  const [optResult, setOptResult] = useState<any>(null);
-  const [isOptimizing, setIsOptimizing] = useState(false);
-
-  // Surface state
-  const [surfaceVarX, setSurfaceVarX] = useState('carat');
-  const [surfaceVarY, setSurfaceVarY] = useState('viewings');
-  const [surfaceMetric, setSurfaceMetric] = useState<'Final Price' | 'Sale Probability' | 'Expected Revenue'>('Final Price');
-  const [surfaceResolution, setSurfaceResolution] = useState(25);
-  const [surfaceData, setSurfaceData] = useState<any>(null);
-  const [isComputingSurface, setIsComputingSurface] = useState(false);
-  const continuousVars =
-    selectedDataset === US_DIAMONDS_DATASET_ID
-      ? ['carat', 'depth', 'table', 'x', 'y', 'z']
-      : ['carat', 'viewings', 'price_index'];
-  const selectedDs = datasets.find((ds: any) => ds.id === selectedDataset);
-  const methodologyCards =
-    selectedDataset === US_DIAMONDS_DATASET_ID
-      ? [
-          {
-            title: 'Hedonic price model',
-            desc: 'Uses diamond attributes to estimate price and uncertainty, similar to a hedonic valuation model.',
-          },
-          {
-            title: 'Quality controls',
-            desc: 'Controls for carat, cut, colour, clarity, depth, table, and dimensions to isolate value drivers.',
-          },
-          {
-            title: 'Uncertainty band',
-            desc: 'Shows a practical prediction interval so teams can judge downside and upside around the point forecast.',
-          },
-        ]
-      : [
-          {
-            title: 'Auction demand signal',
-            desc: 'Combines lot characteristics with viewings and market price index as demand-side econometric proxies.',
-          },
-          {
-            title: 'Two-outcome forecast',
-            desc: 'Models both final price and sale probability so reserve decisions account for revenue and clearance risk.',
-          },
-          {
-            title: 'Policy optimization',
-            desc: 'Searches feasible reserve and lot conditions against objectives such as price, probability, or target revenue.',
-          },
-        ];
-
-  // SHAP state
-  const [shapData, setShapData] = useState<any>(null);
-  const [isComputingShap, setIsComputingShap] = useState(false);
-
-  // Keep defaults sane when switching datasets
-  useEffect(() => {
-    if (selectedDataset === US_DIAMONDS_DATASET_ID) {
-      if (!/ridge|random\s*forest/i.test(modelName)) setModelName('Ridge Regression');
-      if (!continuousVars.includes(surfaceVarX)) setSurfaceVarX('carat');
-      if (!continuousVars.includes(surfaceVarY) || surfaceVarY === surfaceVarX) setSurfaceVarY('depth');
-      if (surfaceMetric !== 'Final Price') setSurfaceMetric('Final Price');
-    } else {
-      if (/ridge/i.test(modelName)) setModelName('Gradient Boosting');
-      if (!continuousVars.includes(surfaceVarX)) setSurfaceVarX('carat');
-      if (!continuousVars.includes(surfaceVarY) || surfaceVarY === surfaceVarX) setSurfaceVarY('viewings');
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedDataset]);
-
-  const handleRunForecast = async () => {
-    if (!selectedDataset) {
-      toast.error('Please select a dataset');
-      return;
-    }
-
+  const runForecast = async () => {
     setIsRunning(true);
     try {
-      const result = await apiClient.predict({
-        datasetId: selectedDataset,
-        modelName,
-        horizon,
+      const [forecastResponse, importanceResponse] = await Promise.all([
+        fetch('/predict', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ datasetId: STATIC_DATASET_ID, modelName: 'Interpretable auction baseline' }),
+        }),
+        fetch('/shap', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ datasetId: STATIC_DATASET_ID, modelName: 'Interpretable auction baseline' }),
+        }),
+      ]);
+      const forecast = await forecastResponse.json();
+      const drivers = await importanceResponse.json();
+      if (!forecastResponse.ok || !forecast.success) throw new Error(forecast.message || 'Forecast failed');
+      if (!importanceResponse.ok || !drivers.success) throw new Error(drivers.message || 'Model explanation failed');
+
+      const decoded = decodeForecastCsv(forecast.outputCsvData);
+      const importance = Object.entries(drivers.price_importance as Record<string, number>)
+        .sort(([, left], [, right]) => right - left)
+        .slice(0, 5)
+        .map(([feature, value]) => ({ feature, value }));
+
+      setResult({
+        predictionId: forecast.predictionId,
+        metrics: forecast.metrics,
+        rows: decoded.rows,
+        importance,
+        csv: decoded.text,
       });
-      setPredictionResult(result);
-      toast.success('Forecast completed!');
-      void logActivity({
-        actorId,
-        action: 'forecast.run',
-        entityType: 'forecast',
-        entityId: String(result?.predictionId ?? selectedDataset),
-        meta: {
-          datasetId: selectedDataset,
-          modelName,
-          horizon,
-          host: typeof window !== 'undefined' ? window.location.host : undefined,
-        },
-      });
+      toast.success('Auction forecast ready');
+      if (user?.id) {
+        void logActivity({
+          actorId: user.id,
+          action: 'forecast.run',
+          entityType: 'forecast',
+          entityId: forecast.predictionId,
+          meta: { datasetId: STATIC_DATASET_ID, modelName: 'Interpretable auction baseline' },
+        });
+      }
     } catch (error: any) {
-      toast.error(error.message || 'Forecast failed');
+      toast.error(error?.message || 'Unable to run forecast');
     } finally {
       setIsRunning(false);
     }
   };
 
-  const handleSinglePredict = async () => {
-    if (!selectedDataset) {
-      toast.error('Please select a dataset');
-      return;
-    }
+  const summary = useMemo(() => {
+    if (!result) return null;
+    const portfolioValue = result.rows.reduce((total, row) => total + row.pred_price, 0);
+    const expectedRevenue = result.rows.reduce((total, row) => total + row.pred_price * row.pred_sale_proba, 0);
+    const averageSaleChance = result.rows.reduce((total, row) => total + row.pred_sale_proba, 0) / result.rows.length;
+    const exceptions = result.rows
+      .map((row) => ({
+        ...row,
+        reserveGap: (row.reserve_price - row.recommended_reserve) / Math.max(row.recommended_reserve, 1),
+      }))
+      .filter((row) => Math.abs(row.reserveGap) > 0.12 || row.pred_sale_proba < 0.65)
+      .sort((left, right) => Math.abs(right.reserveGap) - Math.abs(left.reserveGap));
+    return { portfolioValue, expectedRevenue, averageSaleChance, exceptions };
+  }, [result]);
 
-    setIsPredictingSingle(true);
-    try {
-      const result =
-        selectedDataset === US_DIAMONDS_DATASET_ID
-          ? await apiClient.predictSingle({
-              // US diamonds
-              datasetId: selectedDataset,
-              modelName,
-              carat: singleCarat,
-              cut: singleCut,
-              color: singleColor,
-              clarity: singleClarity,
-              depth: singleDepth,
-              table: singleTable,
-              x: singleX,
-              y: singleY,
-              z: singleZ,
-            } as any)
-          : await apiClient.predictSingle({
-              // Synthetic auction
-              datasetId: selectedDataset,
-              modelName,
-              carat: singleCarat,
-              color: singleColor,
-              clarity: singleClarity,
-              viewings: singleViewings,
-              price_index: singlePriceIndex,
-            });
-      setSinglePrediction(result);
-      toast.success('Prediction completed!');
-      void logActivity({
-        actorId,
-        action: 'predict.single',
-        entityType: 'prediction',
-        entityId: selectedDataset,
-        meta: {
-          datasetId: selectedDataset,
-          modelName,
-          host: typeof window !== 'undefined' ? window.location.host : undefined,
-        },
-      });
-    } catch (error: any) {
-      toast.error(error.message || 'Prediction failed');
-    } finally {
-      setIsPredictingSingle(false);
-    }
+  const download = () => {
+    if (!result) return;
+    const url = URL.createObjectURL(new Blob([result.csv], { type: 'text/csv' }));
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `ODC-auction-forecast-${new Date().toISOString().slice(0, 10)}.csv`;
+    anchor.click();
+    URL.revokeObjectURL(url);
   };
 
-  const handleOptimize = async () => {
-    if (!selectedDataset) {
-      toast.error('Please select a dataset');
-      return;
-    }
-
-    setIsOptimizing(true);
-    try {
-      const request: OptimizeRequest = {
-        datasetId: selectedDataset,
-        modelName,
-        objective: optObjective,
-        n_samples: nSamples,
-        fixed_color: fixedColorOpt,
-        fixed_clarity: fixedClarityOpt,
-      };
-      // US diamonds supports an additional fixed_cut field
-      (request as any).fixed_cut = fixedCutOpt;
-
-      if (optObjective === 'max_price') {
-        if (selectedDataset !== US_DIAMONDS_DATASET_ID) request.min_prob = minProb;
-      } else if (optObjective === 'target') {
-        request.target_price = targetPrice;
-        if (selectedDataset !== US_DIAMONDS_DATASET_ID) request.target_prob = targetProb;
-      }
-
-      const result = await apiClient.optimize(request);
-      if (result.success && result.result) {
-        setOptResult(result.result);
-        toast.success('Optimization completed!');
-        void logActivity({
-          actorId,
-          action: 'optimize.run',
-          entityType: 'optimization',
-          entityId: selectedDataset,
-          meta: {
-            datasetId: selectedDataset,
-            modelName,
-            objective: optObjective,
-            host: typeof window !== 'undefined' ? window.location.host : undefined,
-          },
-        });
-      } else {
-        toast.error(result.message || 'Optimization failed - no feasible solution found');
-        setOptResult(null);
-      }
-    } catch (error: any) {
-      toast.error(error.message || 'Optimization failed');
-      setOptResult(null);
-    } finally {
-      setIsOptimizing(false);
-    }
-  };
-
-  const handleComputeSurface = async () => {
-    if (!selectedDataset) {
-      toast.error('Please select a dataset');
-      return;
-    }
-
-    setIsComputingSurface(true);
-    try {
-      const request: SurfaceRequest = {
-        datasetId: selectedDataset,
-        modelName,
-        var_x: surfaceVarX,
-        var_y: surfaceVarY,
-        metric: surfaceMetric,
-        n_points: surfaceResolution,
-        fixed_color: fixedColorOpt,
-        fixed_clarity: fixedClarityOpt,
-      };
-      (request as any).fixed_cut = fixedCutOpt;
-
-      const result = await apiClient.surface(request);
-      if (result.success) {
-        setSurfaceData(result);
-        toast.success('Surface computation completed!');
-        void logActivity({
-          actorId,
-          action: 'surface.compute',
-          entityType: 'surface',
-          entityId: selectedDataset,
-          meta: {
-            datasetId: selectedDataset,
-            modelName,
-            varX: surfaceVarX,
-            varY: surfaceVarY,
-            metric: surfaceMetric,
-            host: typeof window !== 'undefined' ? window.location.host : undefined,
-          },
-        });
-      } else {
-        toast.error('Surface computation failed');
-      }
-    } catch (error: any) {
-      toast.error(error.message || 'Surface computation failed');
-    } finally {
-      setIsComputingSurface(false);
-    }
-  };
-
-  const handleComputeShap = async () => {
-    if (!selectedDataset) {
-      toast.error('Please select a dataset');
-      return;
-    }
-
-    setIsComputingShap(true);
-    try {
-      const request: ShapRequest = {
-        datasetId: selectedDataset,
-        modelName,
-      };
-
-      const result = await apiClient.shap(request);
-      if (result.success) {
-        setShapData(result);
-        toast.success('SHAP analysis completed!');
-        void logActivity({
-          actorId,
-          action: 'shap.compute',
-          entityType: 'explainability',
-          entityId: selectedDataset,
-          meta: {
-            datasetId: selectedDataset,
-            modelName,
-            host: typeof window !== 'undefined' ? window.location.host : undefined,
-          },
-        });
-      } else {
-        toast.error('SHAP analysis failed');
-      }
-    } catch (error: any) {
-      toast.error(error.message || 'SHAP analysis failed');
-    } finally {
-      setIsComputingShap(false);
-    }
-  };
+  const visibleRows = summary?.exceptions.slice(0, showAll ? 100 : 8) || [];
 
   return (
     <AppShell
-      title="Prediction & Demand Forecasting"
-      subtitle="Forecasts, optimization, solution surfaces, and explainability"
+      title="Prediction & demand"
+      subtitle="Machine-learning support for lot value, sale probability and reserve review"
+      actions={
+        result ? (
+          <button type="button" className="btn-secondary" onClick={download}>
+            <Download className="h-4 w-4" />
+            Export forecast
+          </button>
+        ) : null
+      }
     >
-        <div className="mb-6 overflow-hidden rounded-3xl bg-gradient-to-r from-indigo-950 via-slate-950 to-emerald-950 p-6 text-white shadow-xl">
-          <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-            <div>
-              <div className="text-sm font-medium text-indigo-200">Econometrics-informed auction modeling</div>
-              <h1 className="mt-2 text-3xl font-bold">Prediction & Demand Forecasting</h1>
-              <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-200">
-                Forecast final price, sale probability, reserve guidance, and expected revenue using models that combine
-                diamond attributes with auction demand signals such as viewings and market price index.
-              </p>
+      {!result ? (
+        <div className="mx-auto max-w-4xl">
+          <section className="overflow-hidden rounded-2xl bg-slate-950 p-7 text-white sm:p-9">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-400 text-slate-950">
+              <TrendingUp className="h-5 w-5" />
             </div>
-            <div className="rounded-2xl border border-white/10 bg-white/10 p-4">
-              <div className="text-xs uppercase tracking-wide text-slate-300">Current model setup</div>
-              <div className="mt-2 text-xl font-bold">{modelName}</div>
-              <div className="mt-2 text-sm text-slate-200">{selectedDs?.name} ({selectedDs?.rowCount} rows)</div>
-              <div className="mt-3 text-xs text-slate-300">
-                Decision outputs: price forecast, sale probability, reserve recommendation, scenario surface, SHAP drivers.
+            <h1 className="mt-6 text-3xl font-semibold tracking-tight">Prepare the auction forecast</h1>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">
+              Run one consistent model across the working auction portfolio. The result highlights expected value,
+              clearance likelihood and lots that need a human reserve decision.
+            </p>
+          </section>
+
+          <section className="mt-6 card p-6 sm:p-7">
+            <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <div className="text-xs font-bold uppercase tracking-wide text-slate-400">Data ready</div>
+                <h2 className="mt-2 text-lg font-semibold text-slate-950">{staticDataset.name}</h2>
+                <p className="mt-1 text-sm text-slate-500">{staticDataset.rowCount} simulated auction lots · 9 fields</p>
               </div>
+              <span className="status-badge bg-emerald-50 text-emerald-700 ring-emerald-600/20">
+                <CheckCircle2 className="mr-1 h-3 w-3" /> Validated
+              </span>
             </div>
-          </div>
-          <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
-            {methodologyCards.map((card) => (
-              <div key={card.title} className="rounded-2xl border border-white/10 bg-white/10 p-4">
-                <div className="font-semibold">{card.title}</div>
-                <p className="mt-2 text-sm text-slate-200">{card.desc}</p>
+
+            <div className="mt-6 grid gap-4 border-y border-slate-200 py-6 sm:grid-cols-3">
+              {[
+                ['Model', 'Interpretable auction baseline', 'Lot attributes + demand signals'],
+                ['Outputs', 'Value and sale likelihood', 'Plus reserve guidance'],
+                ['Validation', '20% holdout sample', 'Not training-set performance'],
+              ].map(([label, value, detail]) => (
+                <div key={label}>
+                  <div className="text-xs font-medium text-slate-500">{label}</div>
+                  <div className="mt-1 text-sm font-semibold text-slate-900">{value}</div>
+                  <div className="mt-1 text-xs text-slate-400">{detail}</div>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-2 text-xs leading-5 text-slate-500">
+                <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700" />
+                Model outputs support pricing review; authorised ODC staff retain the final decision.
+              </div>
+              <button type="button" onClick={runForecast} disabled={isRunning} className="btn-primary min-w-44">
+                {isRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                {isRunning ? 'Running model…' : 'Run auction forecast'}
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : summary ? (
+        <div className="space-y-6">
+          <section className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <div className="flex items-center gap-2 text-sm font-semibold text-emerald-700">
+                <CheckCircle2 className="h-4 w-4" /> Forecast complete
+              </div>
+              <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">Auction decision summary</h1>
+              <p className="mt-1 text-sm text-slate-500">Review the exceptions below, then export the lot-level forecast.</p>
+            </div>
+            <button type="button" onClick={runForecast} disabled={isRunning} className="text-sm font-semibold text-slate-600 hover:text-slate-950">
+              Run again
+            </button>
+          </section>
+
+          <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {[
+              ['Expected revenue', money.format(summary.expectedRevenue), 'Value weighted by sale chance', Sparkles],
+              ['Portfolio value', money.format(summary.portfolioValue), 'Model estimate before clearance', TrendingUp],
+              ['Average sale chance', `${Math.round(summary.averageSaleChance * 100)}%`, 'Across all lots', Gauge],
+              ['Reserve exceptions', summary.exceptions.length.toString(), 'Require human review', AlertTriangle],
+            ].map(([label, value, detail, Icon]: any) => (
+              <div key={label} className="metric-card">
+                <Icon className="h-4 w-4 text-emerald-700" />
+                <div className="mt-4 text-2xl font-semibold tracking-tight text-slate-950">{value}</div>
+                <div className="mt-1 text-sm font-medium text-slate-700">{label}</div>
+                <div className="mt-1 text-xs text-slate-400">{detail}</div>
               </div>
             ))}
-          </div>
-        </div>
+          </section>
 
-        <div className="bg-white p-6 rounded-lg shadow-md mb-6">
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Select Dataset
-              </label>
-              <select
-                value={selectedDataset}
-                onChange={(e) => setSelectedDataset(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              >
-                <option value="">Choose a dataset...</option>
-                {datasets.map((ds: any) => (
-                  <option key={ds.id} value={ds.id}>
-                    {ds.name} ({ds.rowCount} rows)
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Model
-              </label>
-              <select
-                value={modelName}
-                onChange={(e) => setModelName(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              >
-                {modelOptions.map((model) => (
-                  <option key={model} value={model}>
-                    {model}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {selectedDataset === US_DIAMONDS_DATASET_ID ? null : (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Horizon (optional)
-                </label>
-                <input
-                  type="number"
-                  value={horizon}
-                  onChange={(e) => setHorizon(parseInt(e.target.value) || 1)}
-                  min="1"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
-            )}
-
-            <button
-              onClick={handleRunForecast}
-              disabled={isRunning || !selectedDataset}
-              className="w-full bg-indigo-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-indigo-700 disabled:opacity-50"
-            >
-              {isRunning
-                ? 'Running...'
-                : selectedDataset === US_DIAMONDS_DATASET_ID
-                ? 'Run Price Prediction'
-                : 'Run Forecast'}
-            </button>
-          </div>
-        </div>
-
-        {/* Single-lot prediction section */}
-        <div className="bg-white p-6 rounded-lg shadow-md mb-6">
-          <h2 className="text-2xl font-semibold mb-4">
-            {selectedDataset === US_DIAMONDS_DATASET_ID ? 'Predict Price' : 'Predict and Recommend'}
-          </h2>
-          <p className="text-gray-600 mb-4">
-            {selectedDataset === US_DIAMONDS_DATASET_ID
-              ? 'Enter diamond attributes to estimate retail price with an 80% uncertainty band.'
-              : 'Enter details about a new diamond lot to get price prediction, sale probability, and recommended reserve price.'}
-          </p>
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Carat weight
-                </label>
-                <input
-                  type="number"
-                  value={singleCarat}
-                  onChange={(e) => setSingleCarat(parseFloat(e.target.value) || 0)}
-                  min="0.1"
-                  max="10.0"
-                  step="0.01"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
-              {selectedDataset === US_DIAMONDS_DATASET_ID ? (
+          <section className="grid gap-6 xl:grid-cols-[1fr_340px]">
+            <div className="card overflow-hidden">
+              <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4 sm:px-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Cut</label>
-                  <select
-                    value={singleCut}
-                    onChange={(e) => setSingleCut(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  >
-                    {cutOptions.map((cut) => (
-                      <option key={cut} value={cut}>
-                        {cut}
-                      </option>
-                    ))}
-                  </select>
+                  <h2 className="section-title">Lots requiring reserve review</h2>
+                  <p className="section-subtitle">Prioritised by reserve gap and low sale probability.</p>
                 </div>
-              ) : null}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Colour grade
-                </label>
-                <select
-                  value={singleColor}
-                  onChange={(e) => setSingleColor(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                >
-                  {colorOptions.map((color) => (
-                    <option key={color} value={color}>
-                      {color}
-                    </option>
-                  ))}
-                </select>
+                <span className="status-badge bg-amber-50 text-amber-700 ring-amber-600/20">{summary.exceptions.length} exceptions</span>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Clarity grade
-                </label>
-                <select
-                  value={singleClarity}
-                  onChange={(e) => setSingleClarity(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                >
-                  {clarityOptions.map((clarity) => (
-                    <option key={clarity} value={clarity}>
-                      {clarity}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              {selectedDataset === US_DIAMONDS_DATASET_ID ? (
-                <>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Depth</label>
-                    <input
-                      type="number"
-                      value={singleDepth}
-                      onChange={(e) => setSingleDepth(parseFloat(e.target.value) || 0)}
-                      step="0.1"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Table</label>
-                    <input
-                      type="number"
-                      value={singleTable}
-                      onChange={(e) => setSingleTable(parseFloat(e.target.value) || 0)}
-                      step="0.1"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">x</label>
-                    <input
-                      type="number"
-                      value={singleX}
-                      onChange={(e) => setSingleX(parseFloat(e.target.value) || 0)}
-                      step="0.01"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">y</label>
-                    <input
-                      type="number"
-                      value={singleY}
-                      onChange={(e) => setSingleY(parseFloat(e.target.value) || 0)}
-                      step="0.01"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">z</label>
-                    <input
-                      type="number"
-                      value={singleZ}
-                      onChange={(e) => setSingleZ(parseFloat(e.target.value) || 0)}
-                      step="0.01"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Number of viewings
-                    </label>
-                    <input
-                      type="number"
-                      value={singleViewings}
-                      onChange={(e) => setSingleViewings(parseInt(e.target.value) || 0)}
-                      min="0"
-                      max="50"
-                      step="1"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Price index
-                    </label>
-                    <input
-                      type="number"
-                      value={singlePriceIndex}
-                      onChange={(e) => setSinglePriceIndex(parseFloat(e.target.value) || 0)}
-                      min="0.5"
-                      max="2.0"
-                      step="0.01"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
-                  </div>
-                </>
-              )}
-            </div>
-            <button
-              onClick={handleSinglePredict}
-              disabled={isPredictingSingle || !selectedDataset}
-              className="w-full bg-indigo-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-indigo-700 disabled:opacity-50"
-            >
-              {isPredictingSingle ? 'Predicting...' : 'Predict'}
-            </button>
-          </div>
-
-          {singlePrediction && (
-            <div className="mt-6 p-4 bg-blue-50 rounded-md">
-              <h3 className="text-lg font-semibold mb-3">Prediction Results</h3>
-              {selectedDataset === US_DIAMONDS_DATASET_ID ? (
-                <div className="space-y-2">
-                  <p className="text-gray-700">
-                    <span className="font-semibold">Predicted price:</span>{' '}
-                    ${Number(singlePrediction.predicted_price ?? singlePrediction.pred_price).toFixed(2)}
-                  </p>
-                  <p className="text-gray-700">
-                    <span className="font-semibold">Predicted price per carat:</span>{' '}
-                    ${Number(singlePrediction.predicted_price_per_carat).toFixed(2)} / ct
-                  </p>
-                  <p className="text-gray-700">
-                    <span className="font-semibold">80% interval:</span>{' '}
-                    ${Number(singlePrediction.price_low).toFixed(0)} – ${Number(singlePrediction.price_high).toFixed(0)}
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <p className="text-gray-700">
-                    <span className="font-semibold">Predicted final price:</span>{' '}
-                    ${singlePrediction.pred_price.toFixed(2)}
-                  </p>
-                  <p className="text-gray-700">
-                    <span className="font-semibold">Predicted sale probability:</span>{' '}
-                    {(singlePrediction.pred_sale_proba * 100).toFixed(1)}%
-                  </p>
-                  <p className="text-gray-700">
-                    <span className="font-semibold">Recommended reserve price:</span>{' '}
-                    ${singlePrediction.recommended_reserve.toFixed(2)}
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Batch predictions section */}
-        <div className="bg-white p-6 rounded-lg shadow-md mb-6">
-          <h2 className="text-2xl font-semibold mb-4">Batch Predictions</h2>
-          <p className="text-sm leading-6 text-gray-600">
-            Run the selected model across the dataset to create an auction-lot forecast table. For auction data, the batch
-            output supports reserve committees with predicted final price, sale likelihood, expected revenue, and a CSV
-            export for internal review.
-          </p>
-        </div>
-
-        {predictionResult && (
-          <div className="space-y-6">
-            {predictionResult.metrics && (
-              <div className="bg-white p-6 rounded-lg shadow-md">
-                <h2 className="text-xl font-semibold mb-4">Metrics</h2>
-                <div className="grid grid-cols-3 gap-4">
-                  {predictionResult.metrics.price_r2 !== undefined && (
-                    <div>
-                      <p className="text-sm text-gray-500">Price R²</p>
-                      <p className="text-2xl font-bold">{predictionResult.metrics.price_r2.toFixed(3)}</p>
-                    </div>
-                  )}
-                  {predictionResult.metrics.price_mae !== undefined && (
-                    <div>
-                      <p className="text-sm text-gray-500">Price MAE</p>
-                      <p className="text-2xl font-bold">{predictionResult.metrics.price_mae.toFixed(2)}</p>
-                    </div>
-                  )}
-                  {predictionResult.metrics.sale_accuracy !== undefined && (
-                    <div>
-                      <p className="text-sm text-gray-500">Sale Accuracy</p>
-                      <p className="text-2xl font-bold">{(predictionResult.metrics.sale_accuracy * 100).toFixed(1)}%</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {predictionResult.previewRows && predictionResult.previewRows.length > 0 && (
-              <div className="bg-white p-6 rounded-lg shadow-md">
-                <h2 className="text-xl font-semibold mb-4">Preview</h2>
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        {Object.keys(predictionResult.previewRows[0]).map((key) => (
-                          <th key={key} className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                            {key}
-                          </th>
-                        ))}
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-left text-sm">
+                  <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                    <tr>
+                      <th className="px-6 py-3">Lot</th>
+                      <th className="px-4 py-3">Current reserve</th>
+                      <th className="px-4 py-3">Model value</th>
+                      <th className="px-4 py-3">Suggested reserve</th>
+                      <th className="px-4 py-3">Sale chance</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {visibleRows.map((row) => (
+                      <tr key={row.lot_id} className="hover:bg-slate-50">
+                        <td className="whitespace-nowrap px-6 py-3">
+                          <div className="font-semibold text-slate-900">Lot {row.lot_id}</div>
+                          <div className="text-xs text-slate-400">{row.carat.toFixed(2)} ct · {row.color} · {row.clarity} · {row.viewings} views</div>
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3 font-medium text-slate-700">{money.format(row.reserve_price)}</td>
+                        <td className="whitespace-nowrap px-4 py-3 font-semibold text-slate-950">{money.format(row.pred_price)}</td>
+                        <td className="whitespace-nowrap px-4 py-3">
+                          <div className="font-semibold text-emerald-800">{money.format(row.recommended_reserve)}</div>
+                          <div className="text-[10px] text-slate-400">{Math.round(row.reserveGap * 100)}% current gap</div>
+                        </td>
+                        <td className={`whitespace-nowrap px-4 py-3 font-semibold ${row.pred_sale_proba < 0.65 ? 'text-rose-700' : 'text-slate-800'}`}>
+                          {Math.round(row.pred_sale_proba * 100)}%
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {predictionResult.previewRows.slice(0, 10).map((row: any, idx: number) => (
-                        <tr key={idx}>
-                          {Object.values(row).map((val: any, i: number) => (
-                            <td key={i} className="px-4 py-2 text-sm text-gray-900">
-                              {typeof val === 'number' ? val.toFixed(2) : val}
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-            )}
-
-            {(predictionResult.outputGcsObject || predictionResult.outputCsvData) && (
-              <div className="bg-white p-6 rounded-lg shadow-md">
-                <h2 className="text-xl font-semibold mb-4">Download Results</h2>
-                <p className="text-gray-600 mb-4">
-                  Download the full predictions as a CSV file.
-                </p>
-                <button
-                  onClick={async () => {
-                    try {
-                      if (predictionResult.outputCsvData) {
-                        // Handle base64 CSV data (static dataset)
-                        const binaryString = atob(predictionResult.outputCsvData);
-                        const bytes = new Uint8Array(binaryString.length);
-                        for (let i = 0; i < binaryString.length; i++) {
-                          bytes[i] = binaryString.charCodeAt(i);
-                        }
-                        const blob = new Blob([bytes], { type: 'text/csv' });
-                        const url = window.URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = `predictions_${predictionResult.predictionId}.csv`;
-                        document.body.appendChild(a);
-                        a.click();
-                        document.body.removeChild(a);
-                        window.URL.revokeObjectURL(url);
-                        toast.success('Download started');
-                      } else if (predictionResult.outputGcsObject && predictionResult.predictionId) {
-                        // Handle GCS download
-                        const blob = await apiClient.downloadPrediction(predictionResult.predictionId);
-                        const url = window.URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = `predictions_${predictionResult.predictionId}.csv`;
-                        document.body.appendChild(a);
-                        a.click();
-                        document.body.removeChild(a);
-                        window.URL.revokeObjectURL(url);
-                        toast.success('Download started');
-                      }
-                    } catch (error: any) {
-                      toast.error(error.message || 'Download failed');
-                    }
-                  }}
-                  className="bg-indigo-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-indigo-700"
-                >
-                  Download CSV
+              {summary.exceptions.length > 8 ? (
+                <button type="button" onClick={() => setShowAll((value) => !value)} className="flex w-full items-center justify-center gap-2 border-t border-slate-200 py-3 text-xs font-semibold text-slate-600 hover:bg-slate-50">
+                  {showAll ? 'Show priority lots only' : `Show more exceptions`}
+                  <ArrowRight className="h-3 w-3" />
                 </button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Optimization & Solution Surfaces Section */}
-        <div className="bg-white p-6 rounded-lg shadow-md mb-6">
-          <h2 className="text-2xl font-semibold mb-4">Optimisation & Solution Surfaces</h2>
-          <p className="text-gray-600 mb-6">
-            {selectedDataset === US_DIAMONDS_DATASET_ID
-              ? 'Explore how features influence predicted price and search for high-value configurations.'
-              : 'Work backwards from a desired outcome or explore how two features influence price, sale probability or expected revenue.'}
-          </p>
-
-          {/* Fixed Categorical Settings */}
-          <div className="mb-6">
-            <h3 className="text-lg font-semibold mb-4">Fixed Categorical Settings</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {selectedDataset === US_DIAMONDS_DATASET_ID ? (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Select cut</label>
-                  <select
-                    value={fixedCutOpt}
-                    onChange={(e) => setFixedCutOpt(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  >
-                    {cutOptions.map((cut) => (
-                      <option key={cut} value={cut}>
-                        {cut}
-                      </option>
-                    ))}
-                  </select>
-                </div>
               ) : null}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Select colour grade
-                </label>
-                <select
-                  value={fixedColorOpt}
-                  onChange={(e) => setFixedColorOpt(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                >
-                  {colorOptions.map((color) => (
-                    <option key={color} value={color}>
-                      {color}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Select clarity grade
-                </label>
-                <select
-                  value={fixedClarityOpt}
-                  onChange={(e) => setFixedClarityOpt(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                >
-                  {clarityOptions.map((clarity) => (
-                    <option key={clarity} value={clarity}>
-                      {clarity}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          </div>
-
-          <div className="border-t pt-6 mt-6">
-            {/* Goal Seeking / Optimization */}
-            <h3 className="text-lg font-semibold mb-4">Goal Seeking / Optimisation</h3>
-            <div className="space-y-4 mb-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Optimisation objective
-                </label>
-                <select
-                  value={optObjective}
-                  onChange={(e) => setOptObjective(e.target.value as 'max_price' | 'max_prob' | 'target')}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                >
-                  {selectedDataset === US_DIAMONDS_DATASET_ID ? (
-                    <>
-                      <option value="max_price">Maximise Price (USD)</option>
-                      <option value="max_prob">Maximise Price per Carat (USD/ct)</option>
-                      <option value="target">Target Price (USD)</option>
-                    </>
-                  ) : (
-                    <>
-                      <option value="max_price">Maximise Final Price</option>
-                      <option value="max_prob">Maximise Sale Probability</option>
-                      <option value="target">Match Target Price & Sale Probability</option>
-                    </>
-                  )}
-                </select>
-              </div>
-
-              {optObjective === 'max_price' && selectedDataset !== US_DIAMONDS_DATASET_ID && (
-                <>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Minimum acceptable sale probability: {minProb.toFixed(2)}
-                    </label>
-                    <input
-                      type="range"
-                      min="0"
-                      max="1"
-                      step="0.05"
-                      value={minProb}
-                      onChange={(e) => setMinProb(parseFloat(e.target.value))}
-                      className="w-full"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Number of random samples
-                    </label>
-                    <input
-                      type="number"
-                      min="100"
-                      max="5000"
-                      step="100"
-                      value={nSamples}
-                      onChange={(e) => setNSamples(parseInt(e.target.value) || 1000)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
-                  </div>
-                </>
-              )}
-
-              {optObjective === 'max_price' && selectedDataset === US_DIAMONDS_DATASET_ID && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Number of random samples</label>
-                  <input
-                    type="number"
-                    min="100"
-                    max="5000"
-                    step="100"
-                    value={nSamples}
-                    onChange={(e) => setNSamples(parseInt(e.target.value) || 1000)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
-                </div>
-              )}
-
-              {optObjective === 'max_prob' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Number of random samples
-                  </label>
-                  <input
-                    type="number"
-                    min="100"
-                    max="5000"
-                    step="100"
-                    value={nSamples}
-                    onChange={(e) => setNSamples(parseInt(e.target.value) || 1000)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
-                </div>
-              )}
-
-              {optObjective === 'target' && (
-                <>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      {selectedDataset === US_DIAMONDS_DATASET_ID ? 'Target price (USD)' : 'Target final price'}
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="100"
-                      value={targetPrice}
-                      onChange={(e) => setTargetPrice(parseFloat(e.target.value) || 0)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
-                  </div>
-                  {selectedDataset === US_DIAMONDS_DATASET_ID ? null : (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Target sale probability: {targetProb.toFixed(2)}
-                      </label>
-                      <input
-                        type="range"
-                        min="0"
-                        max="1"
-                        step="0.05"
-                        value={targetProb}
-                        onChange={(e) => setTargetProb(parseFloat(e.target.value))}
-                        className="w-full"
-                      />
-                    </div>
-                  )}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Number of random samples
-                    </label>
-                    <input
-                      type="number"
-                      min="100"
-                      max="5000"
-                      step="100"
-                      value={nSamples}
-                      onChange={(e) => setNSamples(parseInt(e.target.value) || 2000)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
-                  </div>
-                </>
-              )}
-
-              <button
-                onClick={handleOptimize}
-                disabled={isOptimizing || !selectedDataset}
-                className="w-full bg-indigo-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-indigo-700 disabled:opacity-50"
-              >
-                {isOptimizing ? 'Searching for optimal conditions...' : 'Run optimisation'}
-              </button>
             </div>
 
-            {optResult && (
-              <div className="mt-6 p-4 bg-green-50 rounded-md">
-                <h4 className="text-lg font-semibold mb-3">Best conditions found!</h4>
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4">
-                  <div>
-                    <p className="text-sm text-gray-500">Carat</p>
-                    <p className="font-semibold">{optResult.carat.toFixed(2)}</p>
+            <div className="space-y-6">
+              <div className="card p-5">
+                <h2 className="section-title">Model assurance</h2>
+                <p className="section-subtitle">Performance on {result.metrics.evaluation_rows || 100} held-out lots.</p>
+                <div className="mt-5 space-y-4">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                    <span className="text-sm text-slate-500">Typical price error</span>
+                    <span className="font-semibold text-slate-900">{money.format(result.metrics.price_mae)}</span>
                   </div>
-                  <div>
-                    <p className="text-sm text-gray-500">Viewings</p>
-                    <p className="font-semibold">{optResult.viewings}</p>
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                    <span className="text-sm text-slate-500">Price variation explained</span>
+                    <span className="font-semibold text-slate-900">{Math.max(0, result.metrics.price_r2 * 100).toFixed(0)}%</span>
                   </div>
-                  <div>
-                    <p className="text-sm text-gray-500">Price Index</p>
-                    <p className="font-semibold">{optResult.price_index.toFixed(2)}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500">Colour</p>
-                    <p className="font-semibold">{optResult.color}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500">Clarity</p>
-                    <p className="font-semibold">{optResult.clarity}</p>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-slate-500">Sale outcome accuracy</span>
+                    <span className="font-semibold text-slate-900">{(result.metrics.sale_accuracy * 100).toFixed(0)}%</span>
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <p className="text-gray-700">
-                    <span className="font-semibold">Predicted final price:</span>{' '}
-                    ${optResult.pred_price.toFixed(2)}
-                  </p>
-                  <p className="text-gray-700">
-                    <span className="font-semibold">Predicted sale probability:</span>{' '}
-                    {(optResult.pred_prob * 100).toFixed(1)}%
-                  </p>
-                </div>
               </div>
-            )}
-          </div>
 
-          <div className="border-t pt-6 mt-6">
-            {/* 3D Solution Surfaces */}
-            <h3 className="text-lg font-semibold mb-4">3D Solution Surfaces</h3>
-            <p className="text-gray-600 mb-4">
-              Select two variables to explore how the response changes across their range. You can choose to view the predicted final price, sale probability or expected revenue (price × probability).
-            </p>
-            <div className="space-y-4 mb-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    X‑axis variable
-                  </label>
-                  <select
-                    value={surfaceVarX}
-                    onChange={(e) => setSurfaceVarX(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  >
-                    {continuousVars.map((v) => (
-                      <option key={v} value={v}>
-                        {v}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Y‑axis variable
-                  </label>
-                  <select
-                    value={surfaceVarY}
-                    onChange={(e) => setSurfaceVarY(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  >
-                    {continuousVars.filter((v) => v !== surfaceVarX).map((v) => (
-                      <option key={v} value={v}>
-                        {v}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Metric to display
-                </label>
-                <select
-                  value={surfaceMetric}
-                  onChange={(e) => setSurfaceMetric(e.target.value as 'Final Price' | 'Sale Probability' | 'Expected Revenue')}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                >
-                  <option value="Final Price">Final Price</option>
-                  {selectedDataset === US_DIAMONDS_DATASET_ID ? null : (
-                    <>
-                      <option value="Sale Probability">Sale Probability</option>
-                      <option value="Expected Revenue">Expected Revenue</option>
-                    </>
-                  )}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Surface resolution: {surfaceResolution}
-                </label>
-                <input
-                  type="range"
-                  min="10"
-                  max="50"
-                  step="5"
-                  value={surfaceResolution}
-                  onChange={(e) => setSurfaceResolution(parseInt(e.target.value))}
-                  className="w-full"
-                />
-              </div>
-              <button
-                onClick={handleComputeSurface}
-                disabled={isComputingSurface || !selectedDataset}
-                className="w-full bg-indigo-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-indigo-700 disabled:opacity-50"
-              >
-                {isComputingSurface ? 'Computing surface...' : 'Generate surface'}
-              </button>
-            </div>
-
-            {surfaceData && (
-              <div className="mt-6">
-                <Plot
-                  data={[
-                    {
-                      type: 'surface',
-                      x: surfaceData.x_grid,
-                      y: surfaceData.y_grid,
-                      z: surfaceData.z_values,
-                      colorscale: 'Viridis',
-                      showscale: true,
-                    },
-                  ]}
-                  layout={{
-                    title: `${surfaceMetric} Surface: ${surfaceVarX} vs ${surfaceVarY}`,
-                    scene: {
-                      xaxis: { title: surfaceVarX },
-                      yaxis: { title: surfaceVarY },
-                      zaxis: { title: surfaceMetric },
-                    },
-                    autosize: true,
-                    height: 600,
-                  }}
-                  style={{ width: '100%', height: '100%' }}
-                />
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* SHAP Explainability Section */}
-        <div className="bg-white p-6 rounded-lg shadow-md mb-6">
-          <h2 className="text-2xl font-semibold mb-4">Model Explainability (SHAP)</h2>
-          <p className="text-gray-600 mb-4">
-            Understand which features are most important for predicting price and sale probability using SHAP (SHapley Additive exPlanations) values.
-          </p>
-          <button
-            onClick={handleComputeShap}
-            disabled={isComputingShap || !selectedDataset}
-            className="w-full bg-indigo-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-indigo-700 disabled:opacity-50 mb-6"
-          >
-            {isComputingShap ? 'Computing SHAP values...' : 'Compute Feature Importance'}
-          </button>
-
-          {shapData && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Price Model Feature Importance */}
-              <div>
-                <h3 className="text-lg font-semibold mb-4">Price Model Feature Importance</h3>
-                <div className="space-y-3">
-                  {Object.entries(shapData.price_importance)
-                    .sort(([, a], [, b]) => (b as number) - (a as number))
-                    .map(([feature, importance]) => (
-                      <div key={feature}>
-                        <div className="flex justify-between mb-1">
-                          <span className="text-sm font-medium text-gray-700">{feature}</span>
-                          <span className="text-sm text-gray-600">{(importance as number).toFixed(4)}</span>
+              <div className="card p-5">
+                <h2 className="section-title">What drives value</h2>
+                <p className="section-subtitle">Relative influence in the fitted price model.</p>
+                <div className="mt-5 space-y-3">
+                  {result.importance.map((driver) => {
+                    const max = result.importance[0]?.value || 1;
+                    return (
+                      <div key={driver.feature}>
+                        <div className="mb-1.5 flex items-center justify-between text-xs">
+                          <span className="font-medium text-slate-700">{featureLabels[driver.feature] || driver.feature.replace(':', ' ')}</span>
+                          <span className="text-slate-400">{Math.round(driver.value * 100)}%</span>
                         </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2">
-                          <div
-                            className="bg-indigo-600 h-2 rounded-full"
-                            style={{
-                              width: `${((importance as number) / Math.max(...Object.values(shapData.price_importance) as number[]) * 100)}%`,
-                            }}
-                          />
+                        <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
+                          <div className="h-full rounded-full bg-emerald-600" style={{ width: `${(driver.value / max) * 100}%` }} />
                         </div>
                       </div>
-                    ))}
+                    );
+                  })}
                 </div>
               </div>
-
-              {/* Sale Model Feature Importance */}
-              {selectedDataset === US_DIAMONDS_DATASET_ID ||
-              !shapData.sale_importance ||
-              Object.keys(shapData.sale_importance).length === 0 ? null : (
-                <div>
-                  <h3 className="text-lg font-semibold mb-4">Sale Probability Model Feature Importance</h3>
-                  <div className="space-y-3">
-                    {Object.entries(shapData.sale_importance)
-                      .sort(([, a], [, b]) => (b as number) - (a as number))
-                      .map(([feature, importance]) => (
-                        <div key={feature}>
-                          <div className="flex justify-between mb-1">
-                            <span className="text-sm font-medium text-gray-700">{feature}</span>
-                            <span className="text-sm text-gray-600">{(importance as number).toFixed(4)}</span>
-                          </div>
-                          <div className="w-full bg-gray-200 rounded-full h-2">
-                            <div
-                              className="bg-green-600 h-2 rounded-full"
-                              style={{
-                                width: `${((importance as number) / Math.max(...Object.values(shapData.sale_importance) as number[]) * 100)}%`,
-                              }}
-                            />
-                          </div>
-                        </div>
-                      ))}
-                  </div>
-                </div>
-              )}
             </div>
-          )}
+          </section>
         </div>
+      ) : null}
     </AppShell>
-  );
-}
-
-function ForecastContent() {
-  return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="text-lg">Loading...</div></div>}>
-      <ForecastContentInner />
-    </Suspense>
   );
 }
 
@@ -1240,4 +374,3 @@ export default function ForecastPage() {
     </ProtectedRoute>
   );
 }
-
