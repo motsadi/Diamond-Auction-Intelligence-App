@@ -7,8 +7,8 @@ import { Toaster } from 'react-hot-toast';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Diamond Auction Intelligence',
-  description: 'ML platform for diamond auction predictions',
+  title: 'ODC Auction Intelligence',
+  description: 'Auction pricing, demand forecasting, decision support, and reporting for Okavango Diamond Company.',
 };
 
 export default function RootLayout({
