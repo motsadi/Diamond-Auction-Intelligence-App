@@ -70,6 +70,11 @@
   .status-badge {
     @apply inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ring-1 ring-inset;
   }
+
+  .workbook-cell {
+    @apply rounded-md border border-transparent bg-transparent px-2 py-1.5 text-sm text-slate-800 outline-none transition
+      hover:border-slate-200 hover:bg-white focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-500/15;
+  }
 }
 
 /* Print / PDF export helpers */

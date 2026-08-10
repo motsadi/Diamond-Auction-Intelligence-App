@@ -15,6 +15,7 @@ import {
   History,
   LayoutDashboard,
   Settings,
+  Sheet,
   SlidersHorizontal,
   Users,
   X,
@@ -50,6 +51,7 @@ function Badge({ badge }: { badge: NavItem['badge'] }) {
 
 const icons = {
   overview: LayoutDashboard,
+  workbook: Sheet,
   forecast: ChartNoAxesCombined,
   analysis: BarChart3,
   reports: FileBarChart,

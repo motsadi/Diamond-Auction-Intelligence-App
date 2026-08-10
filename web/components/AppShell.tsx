@@ -18,6 +18,7 @@ const SIDEBAR_STORAGE_KEY = 'dai.sidebar.collapsed';
 
 function getDefaultTitle(pathname: string) {
   if (pathname === '/dashboard') return 'Overview';
+  if (pathname === '/workbook') return 'Auction Workbook';
   if (pathname === '/forecast') return 'Econometric Forecasting';
   if (pathname === '/analysis') return 'Auction Data Diagnostics';
   if (pathname === '/reports') return 'Executive Auction Reports';
@@ -66,6 +67,7 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps) 
     // We only track core pages to avoid log noise.
     const tracked = new Set([
       '/dashboard',
+      '/workbook',
       '/forecast',
       '/copilot',
       '/analysis',
@@ -96,6 +98,7 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps) 
   const navItems: NavItem[] = useMemo(() => {
     const items: NavItem[] = [
       { href: '/dashboard', label: 'Command centre', group: 'Workspace', icon: 'overview' },
+      { href: '/workbook', label: 'Auction workbook', group: 'Workspace', icon: 'workbook', badge: 'Live' },
       { href: '/forecast', label: 'Prediction & demand', group: 'Workspace', icon: 'forecast', badge: 'Live' },
       { href: '/copilot', label: 'Auction Copilot', group: 'Workspace', icon: 'copilot', badge: 'Beta' },
       { href: '/reports', label: 'Reports', group: 'Workspace', icon: 'reports', badge: 'Live' },
