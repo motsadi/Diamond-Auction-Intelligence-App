@@ -112,11 +112,11 @@ function DashboardContent() {
             </p>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <Link href="/forecast" className="group rounded-xl border border-white/10 bg-white/[0.06] p-4 transition hover:bg-white/10">
+            <Link href="/workbook" className="group rounded-xl border border-white/10 bg-white/[0.06] p-4 transition hover:bg-white/10">
               <Target className="h-5 w-5 text-emerald-300" />
               <div className="mt-5 text-sm font-semibold">Review reserves</div>
               <div className="mt-1 flex items-center gap-1 text-xs text-slate-400">
-                Open forecast <ArrowRight className="h-3 w-3 transition group-hover:translate-x-0.5" />
+                Open workbook <ArrowRight className="h-3 w-3 transition group-hover:translate-x-0.5" />
               </div>
             </Link>
             <Link href="/copilot" className="group rounded-xl border border-emerald-300/20 bg-emerald-300/10 p-4 transition hover:bg-emerald-300/15">
